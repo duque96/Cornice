@@ -53,6 +53,14 @@ public final class NotchSurfaceController {
         self.model = initial
         self.panel = NotchPanel(contentRect: CGRect(origin: .zero, size: expandedSize))
         self.hostingView = SurfaceHostingView(rootView: NotchSurfaceView(model: initial))
+
+        // The view lays out at its final size even while the window is the notch:
+        // letting AppKit derive size constraints from it would make the panel
+        // refuse to shrink, leaving a rectangle on screen.
+        hostingView.sizingOptions = []
+        hostingView.autoresizingMask = [.width, .height]
+        panel.contentMinSize = .zero
+        panel.contentMaxSize = expandedSize
     }
 
     public var state: NotchState { model.state }
