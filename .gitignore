@@ -1,0 +1,33 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode
+build/
+DerivedData/
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+Package.resolved
+
+# Build output
+dist/
+*.app/
+
+# Signing / secrets
+*.p12
+*.cer
+*.provisionprofile
+.env
+.env.*
+
+# Local overrides
+*.local.json
