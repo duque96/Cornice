@@ -1,41 +1,68 @@
 import SwiftUI
 
 /// M0 placeholder: proves the surface, says where widgets will land.
+///
+/// Layout rule: the silhouette animates, the content never reflows. The content is
+/// laid out once at its final size and revealed by a mask, so nothing gets squeezed
+/// while the spring is running.
 struct NotchSurfaceView: View {
-    @Bindable var model: NotchSurfaceModel
+    var model: NotchSurfaceModel
+    /// Test-only: renders the surface at a fixed point of the transition.
+    /// Production always drives this from `model.state`.
+    var previewProgress: Double? = nil
 
     private var open: Bool { model.state == .open }
+    private var progress: Double { previewProgress ?? (open ? 1 : 0) }
+    private var size: CGSize {
+        CGSize(
+            width: lerp(model.notchSize.width, model.expandedSize.width),
+            height: lerp(model.notchSize.height, model.expandedSize.height)
+        )
+    }
+    private var topRadius: CGFloat { lerp(model.notchCornerRadius, 10) }
+    private var bottomRadius: CGFloat { lerp(model.notchCornerRadius, 24) }
+    private var contentOpacity: Double {
+        guard previewProgress != nil else { return open ? 1 : 0 }
+        return max(0, min(1, (progress - 0.9) / 0.1))
+    }
+    private var animation: Animation { open ? model.motion.open : model.motion.close }
+
+    private func lerp(_ from: CGFloat, _ to: CGFloat) -> CGFloat {
+        from + (to - from) * CGFloat(progress)
+    }
 
     var body: some View {
-        VStack(spacing: 0) {
-            surface
-            Spacer(minLength: 0)
+        ZStack(alignment: .top) {
+            silhouette
+
+            content
+                .mask(alignment: .top) { maskShape }
+                .opacity(contentOpacity)
+                .scaleEffect(open ? 1 : 0.985, anchor: .top)
+                .animation(open ? model.motion.contentIn : model.motion.contentOut, value: open)
         }
+        .frame(width: model.expandedSize.width, height: model.expandedSize.height, alignment: .top)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    private var surface: some View {
-        let topRadius = open ? 10 : model.notchCornerRadius
-        let bottomRadius = open ? 24 : model.notchCornerRadius
+    private var silhouette: some View {
+        NotchShape(topRadius: topRadius, bottomRadius: bottomRadius)
+            .fill(Color.black)
+            .frame(width: size.width, height: size.height)
+            .overlay {
+                NotchShape(topRadius: topRadius, bottomRadius: bottomRadius)
+                    .stroke(Color.white.opacity(open ? 0.07 : 0), lineWidth: 1)
+            }
+            .animation(animation, value: open)
+    }
 
-        return ZStack(alignment: .topLeading) {
-            NotchShape(topRadius: topRadius, bottomRadius: bottomRadius)
-                .fill(Color.black)
-
-            content
-                .opacity(open ? 1 : 0)
-        }
-        .frame(
-            width: model.surfaceSize.width,
-            height: model.surfaceSize.height,
-            alignment: .top
-        )
-        .clipShape(NotchShape(topRadius: topRadius, bottomRadius: bottomRadius))
-        .overlay {
-            NotchShape(topRadius: topRadius, bottomRadius: bottomRadius)
-                .stroke(Color.white.opacity(open ? 0.08 : 0), lineWidth: 1)
-        }
-        .animation(.spring(response: 0.32, dampingFraction: 0.84), value: model.state)
+    /// Same geometry as the silhouette, but padded to the full panel so the mask
+    /// itself never changes the content's layout.
+    private var maskShape: some View {
+        NotchShape(topRadius: topRadius, bottomRadius: bottomRadius)
+            .frame(width: size.width, height: size.height)
+            .animation(animation, value: open)
+            .frame(width: model.expandedSize.width, height: model.expandedSize.height, alignment: .top)
     }
 
     private var content: some View {
@@ -63,7 +90,7 @@ struct NotchSurfaceView: View {
             }
 
             Text("The notch is live. Widgets land here in M3.")
-                .font(.system(size: 11, weight: .regular))
+                .font(.system(size: 11))
                 .foregroundStyle(Color.white.opacity(0.55))
 
             HStack(spacing: 10) {
@@ -75,6 +102,7 @@ struct NotchSurfaceView: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 20)
         .padding(.top, 16)
+        .frame(width: model.expandedSize.width, height: model.expandedSize.height, alignment: .top)
     }
 
     private func placeholderTile(_ title: String) -> some View {

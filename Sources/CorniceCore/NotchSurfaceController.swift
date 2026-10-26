@@ -47,7 +47,8 @@ public final class NotchSurfaceController {
             notchSize: NotchGeometryMath.defaultNotchSize,
             expandedSize: expandedSize,
             notchCornerRadius: 8,
-            mode: .simulated
+            mode: .simulated,
+            motion: .fromEnvironment()
         )
         self.model = initial
         self.panel = NotchPanel(contentRect: CGRect(origin: .zero, size: expandedSize))
@@ -169,8 +170,9 @@ public final class NotchSurfaceController {
         }
 
         let target = frame(for: model.state)
+        let settleDelay = model.motion.settleDelay
         resizeTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(420))
+            try? await Task.sleep(for: settleDelay)
             guard !Task.isCancelled, let self, self.model.state != .open else { return }
 
             // Nothing may stay on screen while idle: the Space switch snapshots

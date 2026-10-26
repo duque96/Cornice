@@ -36,6 +36,17 @@ Debug switches (environment variables):
 | `CORNICE_SIMULATE=1` | Draw a fake notch instead of using the hardware one |
 | `CORNICE_START_OPEN=1` | Start with the surface expanded (design review) |
 | `CORNICE_DEBUG=1` | Log state transitions to stderr |
+| `CORNICE_OPEN_RESPONSE` | Opening spring response in seconds (default `0.30`) |
+| `CORNICE_OPEN_DAMPING` | Opening spring damping (default `0.90`) |
+| `CORNICE_CLOSE_RESPONSE` | Closing spring response (default `0.24`) |
+| `CORNICE_CLOSE_DAMPING` | Closing spring damping (default `0.96`) |
+| `CORNICE_CONTENT_DELAY` | Seconds before the content fades in (default `0.24`) |
+| `CORNICE_CONTENT_DURATION` | Content fade duration (default `0.16`) |
+
+The content is laid out once at its final size and revealed by a mask shaped like the
+silhouette, so nothing reflows while the spring runs. `SurfaceSnapshotTests` renders
+the surface and a filmstrip of the transition to `$CORNICE_SNAPSHOT_DIR`:
+`CORNICE_SNAPSHOT_DIR=/tmp/cornice swift test --filter SurfaceSnapshotTests`.
 
 ## Architecture
 
