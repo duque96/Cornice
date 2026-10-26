@@ -31,6 +31,7 @@ public final class NotchSurfaceController {
     private var machine = NotchInteractionMachine()
     private var monitors: [Any] = []
     private var screenObserver: NSObjectProtocol?
+    private var spaceObserver: NSObjectProtocol?
     private var isVisible = false
 
     public init(
@@ -71,8 +72,8 @@ public final class NotchSurfaceController {
         refreshGeometry()
         installMonitors()
         observeScreenChanges()
+        observeSpaceChanges()
 
-        panel.orderFrontRegardless()
         isVisible = true
     }
 
@@ -87,6 +88,11 @@ public final class NotchSurfaceController {
         if let screenObserver {
             NotificationCenter.default.removeObserver(screenObserver)
             self.screenObserver = nil
+        }
+
+        if let spaceObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(spaceObserver)
+            self.spaceObserver = nil
         }
 
         panel.orderOut(nil)
@@ -140,7 +146,7 @@ public final class NotchSurfaceController {
         panel.setFrame(frame(for: model.state), display: true)
         hostingView.surfaceSize = model.surfaceSize
 
-        if isVisible {
+        if isVisible, model.state == .open {
             panel.orderFrontRegardless()
         }
     }
@@ -165,8 +171,12 @@ public final class NotchSurfaceController {
         let target = frame(for: model.state)
         resizeTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(420))
-            guard !Task.isCancelled else { return }
-            self?.panel.setFrame(target, display: true)
+            guard !Task.isCancelled, let self, self.model.state != .open else { return }
+
+            // Nothing may stay on screen while idle: the Space switch snapshots
+            // every window, and a transparent overlay turns into a rectangle.
+            self.panel.orderOut(nil)
+            self.panel.setFrame(target, display: true)
         }
     }
 
@@ -186,16 +196,19 @@ public final class NotchSurfaceController {
 
         debugLog("\(model.state.rawValue) -> \(newState.rawValue)")
 
+        // The window must already be at its final size when SwiftUI starts
+        // animating, otherwise the resize and the spring fight each other.
+        if newState == .open {
+            resizeTask?.cancel()
+            panel.setFrame(frame(for: .open), display: true)
+            panel.orderFrontRegardless()
+        }
+
         model.state = newState
         hostingView.surfaceSize = model.surfaceSize
         panel.ignoresMouseEvents = newState != .open
 
-        switch newState {
-        case .open:
-            updateFrame(animated: false)
-        case .armed:
-            break
-        case .dormant:
+        if newState != .open {
             updateFrame(animated: true)
         }
     }
@@ -311,6 +324,21 @@ public final class NotchSurfaceController {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.refreshGeometry()
+            }
+        }
+    }
+
+    private func observeSpaceChanges() {
+        spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.model.state == .open else { return }
+                self.machine.reset(to: .dormant)
+                self.cancelPending()
+                self.setState(.dormant)
             }
         }
     }
