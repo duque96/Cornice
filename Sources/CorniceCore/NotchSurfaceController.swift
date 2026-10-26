@@ -5,21 +5,11 @@ import AppKit
 /// Everything that changes the surface goes through here: SwiftUI only renders.
 @MainActor
 public final class NotchSurfaceController {
-    public struct Timing: Sendable {
-        /// How long the pointer must rest in the hot zone before opening.
-        public var openDelay: Duration
-        /// How long the pointer may leave before collapsing.
-        public var closeDelay: Duration
-
-        public init(openDelay: Duration = .milliseconds(110), closeDelay: Duration = .milliseconds(320)) {
-            self.openDelay = openDelay
-            self.closeDelay = closeDelay
-        }
+    public var onOpenSettings: (() -> Void)? {
+        didSet { model.onOpenSettings = onOpenSettings }
     }
 
-    public var timing: Timing
-    public var expandedSize: CGSize
-
+    private let settings: SettingsStore
     private let geometryProvider: NotchGeometryProviding
     private let model: NotchSurfaceModel
     private let panel: NotchPanel
@@ -33,25 +23,25 @@ public final class NotchSurfaceController {
     private var screenObserver: NSObjectProtocol?
     private var spaceObserver: NSObjectProtocol?
     private var isVisible = false
+    /// Pinned surfaces ignore hover: used by the options window to preview changes.
+    private var isPinned = false
 
     public init(
-        geometryProvider: NotchGeometryProviding = AutomaticNotchGeometry(),
-        expandedSize: CGSize = CGSize(width: 420, height: 190),
-        timing: Timing = Timing()
+        settings: SettingsStore,
+        geometryProvider: NotchGeometryProviding = AutomaticNotchGeometry()
     ) {
+        self.settings = settings
         self.geometryProvider = geometryProvider
-        self.expandedSize = expandedSize
-        self.timing = timing
 
         let initial = NotchSurfaceModel(
             notchSize: NotchGeometryMath.defaultNotchSize,
-            expandedSize: expandedSize,
+            expandedSize: settings.settings.expandedSize,
             notchCornerRadius: 8,
             mode: .simulated,
-            motion: .fromEnvironment()
+            motion: settings.settings.motion
         )
         self.model = initial
-        self.panel = NotchPanel(contentRect: CGRect(origin: .zero, size: expandedSize))
+        self.panel = NotchPanel(contentRect: CGRect(origin: .zero, size: settings.settings.expandedSize))
         self.hostingView = SurfaceHostingView(rootView: NotchSurfaceView(model: initial))
 
         // The view lays out at its final size even while the window is the notch:
@@ -60,7 +50,7 @@ public final class NotchSurfaceController {
         hostingView.sizingOptions = []
         hostingView.autoresizingMask = [.width, .height]
         panel.contentMinSize = .zero
-        panel.contentMaxSize = expandedSize
+        panel.contentMaxSize = CGSize(width: 1200, height: 600)
     }
 
     public var state: NotchState { model.state }
@@ -70,9 +60,7 @@ public final class NotchSurfaceController {
     public func start() {
         guard !isVisible else { return }
 
-        if isDebugLoggingEnabled {
-            debugLog("start")
-        }
+        debugLog("start")
 
         hostingView.rootView = NotchSurfaceView(model: model)
         panel.contentView = hostingView
@@ -120,6 +108,24 @@ public final class NotchSurfaceController {
         setVisible(!isVisible)
     }
 
+    // MARK: - Settings
+
+    /// Re-applies everything the options window can change.
+    public func applySettings() {
+        model.motion = settings.settings.motion
+        refreshGeometry()
+    }
+
+    /// Pins the surface open so the options window can preview changes live.
+    public func setPinned(_ pinned: Bool) {
+        isPinned = pinned
+        if pinned {
+            openImmediately()
+        } else {
+            collapse()
+        }
+    }
+
     // MARK: - Geometry
 
     private func refreshGeometry() {
@@ -132,25 +138,20 @@ public final class NotchSurfaceController {
             return
         }
 
+        let preferred = settings.settings.expandedSize
         let available = CGSize(
             width: max(NotchGeometryMath.minimumNotchWidth, screen.frame.width - 40),
             height: max(80, screen.frame.height - 40)
         )
         let size = CGSize(
-            width: min(expandedSize.width, available.width),
-            height: min(expandedSize.height, available.height)
+            width: min(preferred.width, available.width),
+            height: min(preferred.height, available.height)
         )
         model.expandedSize = size
 
         model.notchSize = notch.size
         model.notchCornerRadius = geometry.cornerRadius
         model.mode = geometry.mode
-
-        let expanded = NotchGeometryMath.expandedRect(
-            screenFrame: screen.frame,
-            notchRect: notch,
-            size: size
-        )
 
         panel.setFrame(frame(for: model.state), display: true)
         hostingView.surfaceSize = model.surfaceSize
@@ -223,17 +224,14 @@ public final class NotchSurfaceController {
         }
     }
 
-    private var isDebugLoggingEnabled: Bool {
-        ProcessInfo.processInfo.environment["CORNICE_DEBUG"] == "1"
-    }
-
     private func debugLog(_ message: String) {
-        guard isDebugLoggingEnabled else { return }
+        guard ProcessInfo.processInfo.environment["CORNICE_DEBUG"] == "1" else { return }
         FileHandle.standardError.write(Data("[cornice] \(message)\n".utf8))
     }
 
     private func pointerMoved() {
-        guard isVisible,
+        guard !isPinned,
+              isVisible,
               let geometry,
               let notch = geometry.notchRect,
               let expanded = expandedRect
@@ -253,7 +251,7 @@ public final class NotchSurfaceController {
             break
 
         case .scheduleOpen:
-            schedule(timing.openDelay) { [weak self] in
+            schedule(settings.settings.hoverOpenDelay) { [weak self] in
                 guard let self else { return }
                 self.apply(self.machine.openDeadlineReached())
             }
@@ -262,7 +260,7 @@ public final class NotchSurfaceController {
             cancelPending()
 
         case .scheduleClose:
-            schedule(timing.closeDelay) { [weak self] in
+            schedule(settings.settings.hoverCloseDelay) { [weak self] in
                 guard let self else { return }
                 self.apply(self.machine.closeDeadlineReached())
             }
@@ -275,17 +273,24 @@ public final class NotchSurfaceController {
         }
     }
 
-    /// Debug affordance: shows the expanded surface without hovering.
+    /// Shows the expanded surface without hovering (debug, preview, options window).
     public func openImmediately() {
         machine.reset(to: .open)
         cancelPending()
         setState(.open)
     }
 
-    private func schedule(_ delay: Duration, _ action: @escaping @MainActor () -> Void) {
+    public func collapse() {
+        isPinned = false
+        machine.reset(to: .dormant)
+        cancelPending()
+        setState(.dormant)
+    }
+
+    private func schedule(_ seconds: Double, _ action: @escaping @MainActor () -> Void) {
         cancelPending()
         pending = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: delay)
+            try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
             self?.pending = nil
             action()
@@ -345,10 +350,8 @@ public final class NotchSurfaceController {
             queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, self.model.state == .open else { return }
-                self.machine.reset(to: .dormant)
-                self.cancelPending()
-                self.setState(.dormant)
+                guard let self, !self.isPinned, self.model.state == .open else { return }
+                self.collapse()
             }
         }
     }

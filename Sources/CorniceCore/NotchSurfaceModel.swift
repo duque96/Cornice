@@ -14,10 +14,8 @@ public enum NotchState: String, Sendable {
 
 /// Timing for the opening and closing transitions.
 ///
-/// Read from the environment so the motion can be tuned without rebuilding:
-/// `CORNICE_OPEN_RESPONSE`, `CORNICE_OPEN_DAMPING`, `CORNICE_CLOSE_RESPONSE`,
-/// `CORNICE_CLOSE_DAMPING`, `CORNICE_CONTENT_DELAY`, `CORNICE_CONTENT_DURATION`.
-public struct NotchMotion: Sendable, Equatable {
+/// Editable in the options window and persisted by `SettingsStore`.
+public struct NotchMotion: Codable, Sendable, Equatable {
     /// Spring response in seconds: higher is slower.
     public var openResponse: Double
     public var openDamping: Double
@@ -65,33 +63,6 @@ public struct NotchMotion: Sendable, Equatable {
     public var settleDelay: Duration {
         .milliseconds(Int((closeResponse * 1.4 + 0.14) * 1000))
     }
-
-    public static func fromEnvironment(
-        _ environment: [String: String] = ProcessInfo.processInfo.environment
-    ) -> NotchMotion {
-        var motion = NotchMotion()
-
-        if let value = environment["CORNICE_OPEN_RESPONSE"].flatMap(Double.init) {
-            motion.openResponse = value
-        }
-        if let value = environment["CORNICE_OPEN_DAMPING"].flatMap(Double.init) {
-            motion.openDamping = value
-        }
-        if let value = environment["CORNICE_CLOSE_RESPONSE"].flatMap(Double.init) {
-            motion.closeResponse = value
-        }
-        if let value = environment["CORNICE_CLOSE_DAMPING"].flatMap(Double.init) {
-            motion.closeDamping = value
-        }
-        if let value = environment["CORNICE_CONTENT_DELAY"].flatMap(Double.init) {
-            motion.contentDelay = value
-        }
-        if let value = environment["CORNICE_CONTENT_DURATION"].flatMap(Double.init) {
-            motion.contentDuration = value
-        }
-
-        return motion
-    }
 }
 
 /// Observable state owned by the controller and read by SwiftUI.
@@ -104,6 +75,8 @@ public final class NotchSurfaceModel {
     public var notchCornerRadius: CGFloat
     public var mode: ScreenGeometry.Mode
     public var motion: NotchMotion
+    /// Set by the controller: lets the panel draw a settings button.
+    @ObservationIgnored public var onOpenSettings: (() -> Void)?
 
     public init(
         notchSize: CGSize,

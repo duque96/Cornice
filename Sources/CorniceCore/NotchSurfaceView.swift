@@ -87,6 +87,16 @@ struct NotchSurfaceView: View {
                 Text(model.mode.rawValue)
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .foregroundStyle(Color.white.opacity(0.3))
+
+                Button {
+                    model.onOpenSettings?()
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+                .help("Settings")
             }
 
             Text("The notch is live. Widgets land here in M3.")

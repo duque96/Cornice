@@ -4,6 +4,7 @@ import CorniceCore
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var controller: NotchSurfaceController?
+    private var settingsWindow: SettingsWindowController?
     private var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -14,15 +15,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ? SimulatedNotchGeometry()
             : AutomaticNotchGeometry()
 
-        let controller = NotchSurfaceController(geometryProvider: provider)
+        let settings = SettingsStore()
+        let controller = NotchSurfaceController(settings: settings, geometryProvider: provider)
         controller.start()
         self.controller = controller
+
+        settings.onChange = { [weak controller] in
+            controller?.applySettings()
+        }
+
+        controller.onOpenSettings = { [weak self] in
+            self?.openSettings()
+        }
+
+        settingsWindow = SettingsWindowController(store: settings) { [weak controller] pinned in
+            controller?.setPinned(pinned)
+        }
 
         if ProcessInfo.processInfo.environment["CORNICE_START_OPEN"] == "1" {
             controller.openImmediately()
         }
 
         installStatusItem()
+
+        if ProcessInfo.processInfo.environment["CORNICE_START_SETTINGS"] == "1" {
+            openSettings()
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -46,6 +64,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         toggle.target = self
         menu.addItem(toggle)
 
+        let options = NSMenuItem(title: "Options…", action: #selector(openSettings), keyEquivalent: ",")
+        options.target = self
+        menu.addItem(options)
+
         menu.addItem(.separator())
 
         let quit = NSMenuItem(title: "Quit Cornice", action: #selector(quit), keyEquivalent: "q")
@@ -54,6 +76,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         item.menu = menu
         statusItem = item
+    }
+
+    @objc private func openSettings() {
+        settingsWindow?.show()
     }
 
     @objc private func toggleSurface() {

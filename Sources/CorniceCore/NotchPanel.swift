@@ -42,6 +42,10 @@ final class SurfaceHostingView: NSHostingView<NotchSurfaceView> {
         fatalError("SurfaceHostingView does not support NSCoding")
     }
 
+    /// The panel never becomes key, so clicks (the settings gear) only work if the
+    /// first click is accepted by the view itself.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
         let originY = isFlipped ? 0 : bounds.height - surfaceSize.height
