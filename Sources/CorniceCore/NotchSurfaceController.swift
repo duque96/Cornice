@@ -27,6 +27,7 @@ public final class NotchSurfaceController {
 
     private var geometry: ScreenGeometry?
     private var pending: Task<Void, Never>?
+    private var resizeTask: Task<Void, Never>?
     private var machine = NotchInteractionMachine()
     private var monitors: [Any] = []
     private var screenObserver: NSObjectProtocol?
@@ -136,11 +137,36 @@ public final class NotchSurfaceController {
             size: size
         )
 
-        panel.setFrame(expanded, display: true)
+        panel.setFrame(frame(for: model.state), display: true)
         hostingView.surfaceSize = model.surfaceSize
 
         if isVisible {
             panel.orderFrontRegardless()
+        }
+    }
+
+    /// While idle the window is exactly the notch: a large transparent window is
+    /// snapshotted during Space transitions and shows up as a visible rectangle.
+    private func frame(for state: NotchState) -> CGRect {
+        guard let notch = geometry?.notchRect else { return .zero }
+        guard state == .open, let expanded = expandedRect else { return notch }
+        return expanded
+    }
+
+    /// Grows the window immediately, shrinks it only after the collapse animation.
+    private func updateFrame(animated: Bool) {
+        resizeTask?.cancel()
+
+        guard animated else {
+            panel.setFrame(frame(for: model.state), display: true)
+            return
+        }
+
+        let target = frame(for: model.state)
+        resizeTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(420))
+            guard !Task.isCancelled else { return }
+            self?.panel.setFrame(target, display: true)
         }
     }
 
@@ -163,6 +189,15 @@ public final class NotchSurfaceController {
         model.state = newState
         hostingView.surfaceSize = model.surfaceSize
         panel.ignoresMouseEvents = newState != .open
+
+        switch newState {
+        case .open:
+            updateFrame(animated: false)
+        case .armed:
+            break
+        case .dormant:
+            updateFrame(animated: true)
+        }
     }
 
     private var isDebugLoggingEnabled: Bool {
