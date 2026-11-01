@@ -21,7 +21,8 @@ pages, instead of being stacked in a list. `placement` finally means something.
 | M5 | Example Widget ported to a bundled disk widget + credential injection | ✅ |
 | M6 | Sidebar options window + declarative widget settings | ✅ |
 | M7 | 6-column grid with pages and trackpad swipe | ✅ |
-| M8 | Native bundles with signatures, drag to reorder | — |
+| M8 | Drag to reorder widgets | ✅ |
+| M9 | Native bundles with signatures | — |
 
 ## The Example Widget widget
 
@@ -107,9 +108,10 @@ clicking a dot.
 └─────────────┴─────────────┘
 ```
 
-`priority` (higher first) decides the order when widgets compete for space. The solver is
-pure and unit-tested: `WidgetGridLayout.layout(widgets:available:)` returns frames, and the
-view only renders them.
+The order is yours: drag rows in *Options → Widgets* and it persists in
+`widgets.json`. `priority` remains as a tiebreak for the future. The solver is pure and
+unit-tested: `WidgetGridLayout.layout(widgets:available:)` returns frames, and the view only
+renders them.
 
 The Example widget ships as 3×3 and the Clock as 3×2, so they sit side by side in the
 default 420×170 panel. Raise the panel height in *Options → Panel* for larger widgets.
@@ -149,7 +151,7 @@ A sidebar, one page per section, applied live:
 | **Motion** | open/close spring (response + bounce), content fade delay and duration |
 | **Interaction** | hover open/close delays |
 | **Panel** | width, height, restore defaults |
-| **Widgets** | gallery: enable/disable, source, capabilities, open folder, reload |
+| **Widgets** | gallery: enable/disable, drag to reorder, source, capabilities, open folder, reload |
 | **<widget name>** | one page per widget that declares settings |
 
 `Show notch` pins the surface open so changes can be previewed while you drag sliders.

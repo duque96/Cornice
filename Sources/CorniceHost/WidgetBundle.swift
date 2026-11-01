@@ -343,6 +343,8 @@ public struct WidgetPreferences: Codable, Sendable, Equatable {
     public var enabledDiskWidgets: [WidgetID] = []
     public var disabledDiskWidgets: [WidgetID] = []
     public var disabledBuiltIns: [WidgetID] = []
+    /// Explicit order, set the first time the user drags a row.
+    public var order: [WidgetID] = []
 
     public init() {}
 
@@ -352,6 +354,7 @@ public struct WidgetPreferences: Codable, Sendable, Equatable {
         enabledDiskWidgets = try container.decodeIfPresent([String].self, forKey: .enabledDiskWidgets) ?? []
         disabledDiskWidgets = try container.decodeIfPresent([String].self, forKey: .disabledDiskWidgets) ?? []
         disabledBuiltIns = try container.decodeIfPresent([String].self, forKey: .disabledBuiltIns) ?? []
+        order = try container.decodeIfPresent([String].self, forKey: .order) ?? []
     }
 }
 
@@ -375,6 +378,11 @@ public final class WidgetPreferencesStore {
         if preferences.disabledDiskWidgets.contains(id) { return false }
         if preferences.enabledDiskWidgets.contains(id) { return true }
         return defaultEnabled
+    }
+
+    public func setOrder(_ ids: [WidgetID]) {
+        preferences.order = ids
+        save()
     }
 
     public func setEnabled(_ id: WidgetID, builtIn: Bool, _ enabled: Bool) {

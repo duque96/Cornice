@@ -6,6 +6,8 @@ public struct WidgetGalleryView: View {
     private var host: WidgetHost
     private let onRevealFolder: () -> Void
 
+    @State private var dropTarget: WidgetID?
+
     public init(host: WidgetHost, onRevealFolder: @escaping () -> Void) {
         self.host = host
         self.onRevealFolder = onRevealFolder
@@ -28,7 +30,7 @@ public struct WidgetGalleryView: View {
                 Button("Open widgets folder", action: onRevealFolder)
                 Button("Reload") { host.reload() }
                 Spacer()
-                Text("Drop .cornicewidget bundles there")
+                Text("Drag rows to reorder · drop bundles in the folder")
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
             }
@@ -38,6 +40,11 @@ public struct WidgetGalleryView: View {
 
     private func row(_ entry: WidgetCatalogEntry) -> some View {
         HStack(alignment: .center, spacing: 10) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.tertiary)
+                .frame(width: 10)
+
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(entry.name)
@@ -73,6 +80,32 @@ public struct WidgetGalleryView: View {
             .labelsHidden()
             .toggleStyle(.switch)
             .controlSize(.mini)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .background {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(dropTarget == entry.id ? Color.accentColor.opacity(0.14) : Color.clear)
+        }
+        .contentShape(Rectangle())
+        .draggable(entry.id) {
+            Text(entry.name)
+                .font(.system(size: 11, weight: .medium))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+        }
+        .dropDestination(for: String.self) { items, _ in
+            guard let dragged = items.first else { return false }
+            host.move(dragged, before: entry.id)
+            dropTarget = nil
+            return true
+        } isTargeted: { targeted in
+            if targeted {
+                dropTarget = entry.id
+            } else if dropTarget == entry.id {
+                dropTarget = nil
+            }
         }
     }
 }

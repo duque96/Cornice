@@ -141,6 +141,9 @@ public final class WidgetHost {
             )
         }
 
+        let orderedIDs = WidgetOrdering.sorted(entries.map(\.id), by: preferences.current.order)
+        entries = orderedIDs.compactMap { id in entries.first { $0.id == id } }
+
         self.factories = factories
         self.manifests = factories.compactMapValues { $0.manifest }
 
@@ -180,6 +183,22 @@ public final class WidgetHost {
 
     public func isEnabled(_ id: WidgetID) -> Bool {
         catalog.first { $0.id == id }?.enabled ?? false
+    }
+
+    /// Drops `id` into the slot of `target` and persists the new order.
+    public func move(_ id: WidgetID, before target: WidgetID) {
+        let ids = catalog.map(\.id)
+        let updated = WidgetOrdering.moving(id, before: target, in: ids)
+        guard updated != ids else { return }
+
+        preferences.setOrder(updated)
+
+        var byID: [WidgetID: WidgetCatalogEntry] = [:]
+        for entry in catalog { byID[entry.id] = entry }
+        catalog = updated.compactMap { byID[$0] }
+
+        let rank = Dictionary(uniqueKeysWithValues: updated.enumerated().map { ($1, $0) })
+        widgets.sort { (rank[$0.id] ?? 0) < (rank[$1.id] ?? 0) }
     }
 
     // MARK: - Settings
