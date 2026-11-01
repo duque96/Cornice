@@ -334,4 +334,23 @@ final class WidgetBundleTests: XCTestCase {
 
         XCTAssertThrowsError(try WidgetBundleStore.load(bundleAt: bundle))
     }
+
+    func testEveryBundledWidgetLoads() throws {
+        let packageRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let directory = packageRoot.appendingPathComponent("BundledWidgets")
+
+        let bundles = try FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil
+        ).filter { $0.pathExtension == WidgetBundleStore.bundleExtension }
+
+        XCTAssertGreaterThanOrEqual(bundles.count, 3)
+
+        for bundle in bundles {
+            _ = try WidgetBundleStore.load(bundleAt: bundle)
+        }
+    }
 }

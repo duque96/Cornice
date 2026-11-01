@@ -8,8 +8,8 @@ A modular host for the MacBook notch. The notch becomes a surface for widgets, a
 
 ## Status
 
-**M7 — the stage has a layout.** Widgets are placed on a 6-column grid with rows, gaps and
-pages, instead of being stacked in a list. `placement` finally means something.
+**M10 — a real homeserver widget.** Cornice talks to the Proxmox status dashboard on the
+LAN: CPU, RAM, disk, guests, temperature and WiFi, all in a 3×3 card.
 
 | Milestone | Content | Done |
 |---|---|---|
@@ -23,7 +23,8 @@ pages, instead of being stacked in a list. `placement` finally means something.
 | M7 | 6-column grid with pages and trackpad swipe | ✅ |
 | M8 | Drag to reorder widgets | ✅ |
 | M9 | Drag to resize widgets on the grid | ✅ |
-| M10 | Native bundles with signatures | — |
+| M10 | Status widget (LAN dashboard) | ✅ |
+| M11 | Native bundles with signatures | — |
 
 ## The Example Widget widget
 
@@ -121,6 +122,22 @@ behind it.
 
 The Example widget ships as 3×3 and the Clock as 3×2, so they sit side by side in the
 default 420×170 panel. Raise the panel height in *Options → Panel* for larger widgets.
+
+## The Status widget
+
+`BundledWidgets/Status.cornicewidget` reads `http://192.0.2.10:8123/api/overview`
+(the Proxmox dashboard) and renders CPU, RAM and root-disk bars plus guests, hottest
+temperature and WiFi signal. Green below 70%, amber above, red above 90%; the dot goes
+amber when the dashboard cannot be reached.
+
+It is the first widget that needed local networking, so the app declares:
+
+- `NSLocalNetworkUsageDescription` — macOS asks for permission the first time.
+- `NSAppTransportSecurity → NSAllowsLocalNetworking` — plain HTTP to a private IP on LAN.
+- `networkHosts: ["192.0.2.10"]` — the host policy accepts IP literals too.
+
+Outside the house it keeps working through the tailnet (the `dns` node is the subnet
+router); if neither is reachable it says so instead of spinning.
 
 ## Capabilities
 

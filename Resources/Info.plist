@@ -24,6 +24,13 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Cornice reads your homeserver dashboard on the local network to show its status.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Daniel Duque</string>
 </dict>
