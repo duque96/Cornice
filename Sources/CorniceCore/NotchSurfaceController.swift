@@ -394,7 +394,9 @@ public final class NotchSurfaceController {
         // Only horizontal intent; vertical scrolling stays with the content.
         guard abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) else { return }
 
-        if let step = pageGesture.feed(deltaX: event.scrollingDeltaX, now: Date()) {
+        // Natural scrolling reports a leftward swipe as a positive delta; invert it so
+        // swiping left pages forward, like every other horizontal pager.
+        if let step = pageGesture.feed(deltaX: -event.scrollingDeltaX, now: Date()) {
             pager.advance(step)
         }
     }
