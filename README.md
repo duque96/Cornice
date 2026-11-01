@@ -101,8 +101,8 @@ The Clock widget ships with the app (installed disabled): enable it in *Options 
 The stage is a **6-column grid**: `placement.columns` is a span (1–6) and
 `placement.rows` sets the height (30 pt per row plus 8 pt gaps). Widgets flow left to
 right and wrap to the next row; when a row does not fit vertically, the rest goes to a new
-page and dots appear at the bottom. Pages change with a horizontal trackpad swipe or by
-clicking a dot.
+page and dots appear at the bottom. The page follows a horizontal trackpad drag — the next
+page slides in as you swipe — and settles on release with a spring; you can also click a dot.
 
 ```
 ┌─────────────┬─────────────┐

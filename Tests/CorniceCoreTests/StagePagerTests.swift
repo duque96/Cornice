@@ -3,15 +3,15 @@ import XCTest
 
 final class StagePagerTests: XCTestCase {
     @MainActor
-    func testAdvanceClampsToTheAvailablePages() {
+    func testSelectClampsToTheAvailablePages() {
         let pager = StagePager()
         pager.setPageCount(3)
 
-        pager.advance(1)
+        pager.select(1)
         XCTAssertEqual(pager.index, 1)
-        pager.advance(5)
+        pager.select(5)
         XCTAssertEqual(pager.index, 2)
-        pager.advance(-9)
+        pager.select(-9)
         XCTAssertEqual(pager.index, 0)
     }
 
@@ -26,37 +26,66 @@ final class StagePagerTests: XCTestCase {
         XCTAssertEqual(pager.index, 1)
     }
 
-    func testGestureNeedsEnoughTravel() {
-        var gesture = PagerGestureAccumulator(threshold: 30, cooldown: 0.25)
-        let now = Date(timeIntervalSince1970: 1_000)
+    @MainActor
+    func testDragIsClampedToThePageWidth() {
+        let pager = StagePager()
+        pager.setPageCount(2)
+        pager.beginDrag()
 
-        XCTAssertNil(gesture.feed(deltaX: 10, now: now))
-        XCTAssertNil(gesture.feed(deltaX: 10, now: now))
-        XCTAssertEqual(gesture.feed(deltaX: 15, now: now), 1)
+        pager.drag(by: -5_000, limit: 380)
+        XCTAssertEqual(pager.offset, -380)
     }
 
-    func testGestureIsDirectional() {
-        var gesture = PagerGestureAccumulator(threshold: 30, cooldown: 0)
-        let now = Date(timeIntervalSince1970: 1_000)
+    @MainActor
+    func testDragRubberBandsAtTheEnds() {
+        let pager = StagePager()
+        pager.setPageCount(2)
+        pager.beginDrag()
 
-        XCTAssertEqual(gesture.feed(deltaX: -40, now: now), -1)
+        // Already on the first page: dragging forwards (positive) is damped.
+        pager.drag(by: 200, limit: 380)
+        XCTAssertEqual(pager.offset, 70, accuracy: 0.5)
     }
 
-    func testGestureRespectsTheCooldown() {
-        var gesture = PagerGestureAccumulator(threshold: 30, cooldown: 0.5)
-        let now = Date(timeIntervalSince1970: 1_000)
+    @MainActor
+    func testPendingStepUsesAThreshold() {
+        let pager = StagePager()
+        pager.setPageCount(2)
+        pager.beginDrag()
 
-        XCTAssertEqual(gesture.feed(deltaX: 40, now: now), 1)
-        XCTAssertNil(gesture.feed(deltaX: 40, now: now.addingTimeInterval(0.2)))
-        XCTAssertEqual(gesture.feed(deltaX: 40, now: now.addingTimeInterval(0.6)), 1)
+        pager.drag(by: -20, limit: 380)
+        XCTAssertNil(pager.pendingStep(limit: 380))
+
+        pager.drag(by: -120, limit: 380)
+        XCTAssertEqual(pager.pendingStep(limit: 380), 1)
     }
 
-    func testResetDropsPartialTravel() {
-        var gesture = PagerGestureAccumulator(threshold: 30, cooldown: 0)
-        let now = Date(timeIntervalSince1970: 1_000)
+    @MainActor
+    func testCommitMovesThePageAndResetsTheOffset() {
+        let pager = StagePager()
+        pager.setPageCount(3)
+        pager.beginDrag()
+        pager.drag(by: -200, limit: 380)
 
-        XCTAssertNil(gesture.feed(deltaX: 20, now: now))
-        gesture.reset()
-        XCTAssertNil(gesture.feed(deltaX: 20, now: now))
+        pager.commit(step: 1)
+
+        XCTAssertEqual(pager.index, 1)
+        XCTAssertEqual(pager.offset, 0)
+    }
+
+    @MainActor
+    func testCancelAndEndResetTheDragState() {
+        let pager = StagePager()
+        pager.setPageCount(2)
+        pager.beginDrag()
+        pager.drag(by: -200, limit: 380)
+
+        pager.cancelDrag()
+        XCTAssertEqual(pager.offset, 0)
+        XCTAssertTrue(pager.isDragging)
+
+        pager.endInteraction()
+        XCTAssertFalse(pager.isDragging)
+        XCTAssertEqual(pager.offset, 0)
     }
 }

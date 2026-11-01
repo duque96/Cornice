@@ -131,8 +131,11 @@ Reglas que no hay que romper:
   (`topFlare = 10`), esquinas inferiores convexas (`24`). Es la forma de BoringNotch /
   DynamicNotchKit. No volver a “redondear hacia dentro”.
 - `NotchInteractionMachine` (puro): `dormant → armed → open`; el controlador pone los timers.
-- `StagePager`: página actual + `PagerGestureAccumulator` (swipe horizontal del trackpad,
-  umbral 30 pt, cooldown 250 ms). Los puntos también cambian de página.
+- `StagePager`: página actual + `offset` de arrastre + `isDragging`. El swipe horizontal
+  mueve la página con el dedo; solo durante el gesto se montan las páginas vecinas (los
+  widgets de cada página son disjuntos, así que no se duplica ningún `WKWebView`). Al soltar,
+  un spring decide: `|offset| > max(40, 22% del ancho)` avanza, si no vuelve. El signo de
+  `scrollingDeltaX` se invierte para que deslizar a la izquierda pase página.
 
 ### Alto automático
 
@@ -352,7 +355,7 @@ swift test
 
 - Geometría del notch y zonas (puro).
 - Máquina de estados del hover.
-- Pager + gesto.
+- Pager: arrastre, rubber-band en los extremos, commit/cancel.
 - Ajustes: clamp, round-trip, archivo corrupto, claves ausentes.
 - Grid: filas, páginas, prioridad, límites.
 - Orden y tamaños: `WidgetOrdering`, `WidgetResize`, persistencia.

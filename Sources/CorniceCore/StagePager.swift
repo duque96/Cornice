@@ -1,12 +1,18 @@
 import Foundation
 import Observation
 
-/// Which page of the stage is visible.
+/// Which page of the stage is visible, plus the interactive drag offset.
 @Observable
 @MainActor
 public final class StagePager {
     public private(set) var pageCount: Int = 1
     public var index: Int = 0
+
+    /// Horizontal offset of the current page in points. Negative means "dragging
+    /// towards the next page".
+    public private(set) var offset: CGFloat = 0
+    /// While true, the neighbouring pages are mounted so they can slide in.
+    public private(set) var isDragging = false
 
     public init() {}
 
@@ -16,42 +22,53 @@ public final class StagePager {
 
         pageCount = clamped
         index = min(index, clamped - 1)
+        offset = 0
     }
 
-    public func advance(_ delta: Int) {
-        index = min(max(0, index + delta), max(0, pageCount - 1))
-    }
-}
+    // MARK: - Drag
 
-/// Turns a stream of trackpad deltas into page changes: one change per gesture,
-/// after enough travel and with a cooldown so momentum does not skip pages.
-public struct PagerGestureAccumulator: Sendable {
-    public var threshold: CGFloat
-    public var cooldown: TimeInterval
-
-    private var accumulated: CGFloat = 0
-    private var lastChange: Date = .distantPast
-
-    public init(threshold: CGFloat = 30, cooldown: TimeInterval = 0.25) {
-        self.threshold = threshold
-        self.cooldown = cooldown
+    public func beginDrag() {
+        isDragging = true
     }
 
-    /// Returns +1 for the next page, -1 for the previous one, or nil.
-    public mutating func feed(deltaX: CGFloat, now: Date) -> Int? {
-        accumulated += deltaX
+    public func drag(by delta: CGFloat, limit: CGFloat) {
+        guard limit > 0 else { return }
 
-        guard abs(accumulated) >= threshold,
-              now.timeIntervalSince(lastChange) >= cooldown
-        else { return nil }
+        let proposed = offset + delta
+        let atStart = index == 0 && proposed > 0
+        let atEnd = index == pageCount - 1 && proposed < 0
 
-        let direction = accumulated > 0 ? 1 : -1
-        accumulated = 0
-        lastChange = now
-        return direction
+        // Rubber-band when there is no page in that direction.
+        offset = (atStart || atEnd)
+            ? proposed * 0.35
+            : min(max(proposed, -limit), limit)
     }
 
-    public mutating func reset() {
-        accumulated = 0
+    /// Which way the drag would settle: +1 next, -1 previous, nil to snap back.
+    public func pendingStep(limit: CGFloat, fraction: CGFloat = 0.22) -> Int? {
+        let threshold = max(40, limit * fraction)
+        if offset <= -threshold { return 1 }
+        if offset >= threshold { return -1 }
+        return nil
+    }
+
+    public func commit(step: Int) {
+        index = min(max(0, index + step), max(0, pageCount - 1))
+        offset = 0
+    }
+
+    public func cancelDrag() {
+        offset = 0
+    }
+
+    public func endInteraction() {
+        offset = 0
+        isDragging = false
+    }
+
+    /// Jumps to a page (used by the dots).
+    public func select(_ page: Int) {
+        index = min(max(0, page), max(0, pageCount - 1))
+        offset = 0
     }
 }

@@ -42,7 +42,7 @@ public final class NotchSurfaceController {
     private var isVisible = false
     /// Pinned surfaces ignore hover: used by the options window to preview changes.
     private var isPinned = false
-    private var pageGesture = PagerGestureAccumulator()
+    private var settleTask: Task<Void, Never>?
 
     public init(
         settings: SettingsStore,
@@ -386,18 +386,73 @@ public final class NotchSurfaceController {
               expanded.contains(NSEvent.mouseLocation)
         else { return }
 
-        if event.phase == .ended || event.momentumPhase == .ended {
-            pageGesture.reset()
+        let width = model.expandedSize.width - 40
+
+        switch event.momentumPhase {
+        case .ended:
+            settlePaging(width: width)
             return
+        case .began, .changed:
+            // Momentum continues the same gesture: cancel the fallback timer.
+            settleTask?.cancel()
+        default:
+            break
+        }
+
+        if event.phase == .ended {
+            // Give momentum a chance to arrive before deciding.
+            scheduleSettling(width: width, after: 0.18)
+            return
+        }
+
+        if event.phase == .began {
+            pager.beginDrag()
         }
 
         // Only horizontal intent; vertical scrolling stays with the content.
         guard abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) else { return }
 
+        if !pager.isDragging {
+            pager.beginDrag()
+        }
+
         // Natural scrolling reports a leftward swipe as a positive delta; invert it so
-        // swiping left pages forward, like every other horizontal pager.
-        if let step = pageGesture.feed(deltaX: -event.scrollingDeltaX, now: Date()) {
-            pager.advance(step)
+        // swiping left pages forward.
+        pager.drag(by: -event.scrollingDeltaX, limit: width)
+
+        // A mouse wheel never reports a phase: settle when it stops.
+        if event.phase == .none && event.momentumPhase == .none {
+            scheduleSettling(width: width, after: 0.16)
+        }
+    }
+
+    private func scheduleSettling(width: CGFloat, after seconds: Double) {
+        settleTask?.cancel()
+        settleTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(Int(seconds * 1000)))
+            guard let self, !Task.isCancelled else { return }
+            self.settlePaging(width: width)
+        }
+    }
+
+    private func settlePaging(width: CGFloat) {
+        settleTask?.cancel()
+
+        let step = pager.pendingStep(limit: width) ?? 0
+
+        withAnimation(.spring(response: 0.30, dampingFraction: 0.9)) {
+            if step == 0 {
+                pager.cancelDrag()
+            } else {
+                pager.commit(step: step)
+            }
+        }
+
+        // Keep the neighbours mounted until the spring has settled.
+        settleTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(380))
+            guard let self, !Task.isCancelled else { return }
+            self.pager.endInteraction()
         }
     }
 
