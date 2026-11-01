@@ -19,7 +19,14 @@ private final class LanguageProbeWidget: CorniceWidget {
 }
 
 @MainActor
+private final class LanguageProbeRegistry {
+    var contexts: [WidgetContext] = []
+}
+
+@MainActor
 private struct LanguageProbeFactory: WidgetFactory {
+    let registry: LanguageProbeRegistry
+
     let manifest = WidgetManifest(
         id: "com.example.probe",
         name: "Probe",
@@ -28,7 +35,8 @@ private struct LanguageProbeFactory: WidgetFactory {
     )
 
     func make(context: WidgetContext) -> any CorniceWidget {
-        LanguageProbeWidget(context: context)
+        registry.contexts.append(context)
+        return LanguageProbeWidget(context: context)
     }
 }
 
@@ -136,8 +144,9 @@ final class CapabilityTests: XCTestCase {
             .appendingPathComponent("cornice-lang-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }
 
+        let registry = LanguageProbeRegistry()
         let host = WidgetHost(
-            factories: [LanguageProbeFactory()],
+            factories: [LanguageProbeFactory(registry: registry)],
             widgetsDirectory: root.appendingPathComponent("Widgets", isDirectory: true),
             preferences: WidgetPreferencesStore(url: root.appendingPathComponent("widgets.json")),
             settingsStore: WidgetSettingsStore(root: root.appendingPathComponent("settings"))
@@ -146,5 +155,11 @@ final class CapabilityTests: XCTestCase {
         host.start()
 
         XCTAssertEqual(host.language.resolved, .es)
+        XCTAssertEqual(registry.contexts.last?.language, .es)
+
+        // Switching language rebuilds the mounted widgets with the new value.
+        host.setLanguage(.en)
+        XCTAssertEqual(registry.contexts.count, 2)
+        XCTAssertEqual(registry.contexts.last?.language, .en)
     }
 }
