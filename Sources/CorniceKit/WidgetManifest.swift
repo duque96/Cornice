@@ -4,7 +4,7 @@ public typealias WidgetID = String
 
 // MARK: - Version
 
-public struct SemanticVersion: Codable, Sendable, Equatable, CustomStringConvertible {
+public struct SemanticVersion: Codable, Sendable, Equatable, Comparable, CustomStringConvertible {
     public let major: Int
     public let minor: Int
     public let patch: Int
@@ -16,6 +16,10 @@ public struct SemanticVersion: Codable, Sendable, Equatable, CustomStringConvert
     }
 
     public var description: String { "\(major).\(minor).\(patch)" }
+
+    public static func < (lhs: SemanticVersion, rhs: SemanticVersion) -> Bool {
+        (lhs.major, lhs.minor, lhs.patch) < (rhs.major, rhs.minor, rhs.patch)
+    }
 }
 
 // MARK: - Capabilities
@@ -68,6 +72,32 @@ public enum RefreshPolicy: Sendable, Equatable {
     case interval(TimeInterval)
 }
 
+// MARK: - Credentials
+
+/// A secret the host injects into requests for one host. The widget never sees the
+/// value: `cornice.fetch` goes out already authenticated.
+public struct CredentialRule: Codable, Sendable, Equatable {
+    public let host: String
+    public let header: String
+    public let prefix: String
+    public let service: String
+    public let account: String
+
+    public init(
+        host: String,
+        header: String = "Authorization",
+        prefix: String = "Bearer ",
+        service: String,
+        account: String
+    ) {
+        self.host = host
+        self.header = header
+        self.prefix = prefix
+        self.service = service
+        self.account = account
+    }
+}
+
 // MARK: - Manifest
 
 /// The contract. `apiVersion` is checked by the host before a widget is mounted.
@@ -83,6 +113,8 @@ public struct WidgetManifest: Sendable, Equatable {
     public let networkHosts: [String]
     /// Keychain services this widget may read. Required when declaring `.keychain`.
     public let keychainServices: [String]
+    /// Secrets the host may attach to outgoing requests on the widget's behalf.
+    public let credentials: [CredentialRule]
     public let placement: Placement
     public let refresh: RefreshPolicy
 
@@ -94,6 +126,7 @@ public struct WidgetManifest: Sendable, Equatable {
         capabilities: Set<Capability> = [],
         networkHosts: [String] = [],
         keychainServices: [String] = [],
+        credentials: [CredentialRule] = [],
         placement: Placement,
         refresh: RefreshPolicy = .manual
     ) {
@@ -104,6 +137,7 @@ public struct WidgetManifest: Sendable, Equatable {
         self.capabilities = capabilities
         self.networkHosts = networkHosts
         self.keychainServices = keychainServices
+        self.credentials = credentials
         self.placement = placement
         self.refresh = refresh
     }
@@ -125,6 +159,20 @@ public struct WidgetManifest: Sendable, Equatable {
         }
         if capabilities.contains(.keychain) && keychainServices.isEmpty {
             problems.append("keychain capability requires keychainServices")
+        }
+        for credential in credentials {
+            if credential.header.isEmpty {
+                problems.append("credential header is empty")
+            }
+            if !capabilities.contains(.keychain) {
+                problems.append("credentials require the keychain capability")
+            }
+            if !keychainServices.contains(credential.service) {
+                problems.append("credential service '\(credential.service)' is not in keychainServices")
+            }
+            if !networkHosts.contains(where: { $0.caseInsensitiveCompare(credential.host) == .orderedSame }) {
+                problems.append("credential host '\(credential.host)' is not in networkHosts")
+            }
         }
         return problems
     }

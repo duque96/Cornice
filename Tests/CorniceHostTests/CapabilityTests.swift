@@ -3,7 +3,7 @@ import XCTest
 @testable import CorniceKit
 
 final class CapabilityTests: XCTestCase {
-    private struct FakeKeychain: KeychainAccessing {
+    private struct FakeSecrets: SecretAccessing {
         let values: [String: String]
 
         func secret(service: String, account: String) -> String? {
@@ -39,14 +39,64 @@ final class CapabilityTests: XCTestCase {
         XCTAssertTrue(limiter.allow(now: now.addingTimeInterval(61)))
     }
 
-    func testScopedKeychainOnlyAnswersForDeclaredServices() {
-        let fake = FakeKeychain(values: [
+    func testScopedSecretsOnlyAnswersForDeclaredServices() {
+        let fake = FakeSecrets(values: [
             "com.duque.cornice/opencode-api-key": "secret",
             "other.app/api-key": "nope",
         ])
-        let scoped = ScopedKeychain(base: fake, allowedServices: ["com.duque.cornice"])
+        let scoped = ScopedSecrets(base: fake, allowedServices: ["com.duque.cornice"])
 
         XCTAssertEqual(scoped.secret(service: "com.duque.cornice", account: "opencode-api-key"), "secret")
         XCTAssertNil(scoped.secret(service: "other.app", account: "api-key"))
+    }
+
+    // MARK: - Credential injection
+
+    private func credentialSource(secret: String? = "sk-test") -> CredentialSource {
+        let keychain = FakeSecrets(values: secret.map { ["com.duque.cornice/opencode-api-key": $0] } ?? [:])
+        return CredentialSource(
+            rule: CredentialRule(
+                host: "example.com",
+                header: "Authorization",
+                prefix: "Bearer ",
+                service: "com.duque.cornice",
+                account: "opencode-api-key"
+            ),
+            secrets: keychain
+        )
+    }
+
+    func testCredentialsAreInjectedForTheDeclaredHost() {
+        let headers = CredentialInjector.apply([:], host: "example.com", sources: [credentialSource()])
+
+        XCTAssertEqual(headers["Authorization"], "Bearer sk-test")
+    }
+
+    func testCredentialsAreInjectedForSubdomains() {
+        let headers = CredentialInjector.apply([:], host: "api.example.com", sources: [credentialSource()])
+
+        XCTAssertEqual(headers["Authorization"], "Bearer sk-test")
+    }
+
+    func testCredentialsNeverLeaveTheDeclaredHost() {
+        let headers = CredentialInjector.apply([:], host: "example.com", sources: [credentialSource()])
+
+        XCTAssertTrue(headers.isEmpty)
+    }
+
+    func testWidgetHeadersWinOverInjectedCredentials() {
+        let headers = CredentialInjector.apply(
+            ["Authorization": "Bearer custom"],
+            host: "example.com",
+            sources: [credentialSource()]
+        )
+
+        XCTAssertEqual(headers["Authorization"], "Bearer custom")
+    }
+
+    func testMissingSecretInjectsNothing() {
+        let headers = CredentialInjector.apply([:], host: "example.com", sources: [credentialSource(secret: nil)])
+
+        XCTAssertTrue(headers.isEmpty)
     }
 }

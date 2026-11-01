@@ -23,6 +23,7 @@ public struct WidgetCatalogEntry: Identifiable, Sendable {
     public let version: SemanticVersion
     public let capabilities: Set<Capability>
     public let source: Source
+    public let defaultEnabled: Bool
     public var enabled: Bool
 }
 
@@ -49,7 +50,7 @@ public final class WidgetHost {
     public private(set) var discoveryErrors: [String] = []
 
     private let builtInFactories: [any WidgetFactory]
-    private let baseKeychain: any KeychainAccessing
+    private let secretStore: any SecretAccessing
     private let stageWidth: CGFloat
     private let widgetsDirectory: URL
     private let preferences: WidgetPreferencesStore
@@ -61,13 +62,13 @@ public final class WidgetHost {
 
     public init(
         factories: [any WidgetFactory],
-        keychain: any KeychainAccessing = SystemKeychain(),
+        secretStore: any SecretAccessing = FileSecretStore(),
         stageWidth: CGFloat = 380,
         widgetsDirectory: URL = WidgetPaths.widgetsDirectory,
         preferences: WidgetPreferencesStore? = nil
     ) {
         self.builtInFactories = factories
-        self.baseKeychain = keychain
+        self.secretStore = secretStore
         self.stageWidth = stageWidth
         self.widgetsDirectory = widgetsDirectory
         self.preferences = preferences ?? WidgetPreferencesStore()
@@ -103,6 +104,7 @@ public final class WidgetHost {
                     version: manifest.version,
                     capabilities: manifest.capabilities,
                     source: .builtIn,
+                    defaultEnabled: true,
                     enabled: preferences.isEnabled(manifest.id, builtIn: true)
                 )
             )
@@ -122,7 +124,12 @@ public final class WidgetHost {
                     version: manifest.version,
                     capabilities: manifest.capabilities,
                     source: .disk,
-                    enabled: preferences.isEnabled(manifest.id, builtIn: false)
+                    defaultEnabled: bundle.defaultEnabled,
+                    enabled: preferences.isEnabled(
+                        manifest.id,
+                        builtIn: false,
+                        defaultEnabled: bundle.defaultEnabled
+                    )
                 )
             )
         }
@@ -187,17 +194,25 @@ public final class WidgetHost {
         let manifest = factory.manifest
         let widgetLog = WidgetLog(subsystem: manifest.id)
 
-        let scopedKeychain: (any KeychainAccessing)? = manifest.capabilities.contains(.keychain)
-            ? ScopedKeychain(base: baseKeychain, allowedServices: Set(manifest.keychainServices))
+        let scopedSecrets: (any SecretAccessing)? = manifest.capabilities.contains(.keychain)
+            ? ScopedSecrets(base: secretStore, allowedServices: Set(manifest.keychainServices))
             : nil
 
+        let credentialSources: [CredentialSource] = scopedSecrets.map { secrets in
+            manifest.credentials.map { CredentialSource(rule: $0, secrets: secrets) }
+        } ?? []
+
         let http: (any HTTPClient)? = manifest.capabilities.contains(.network)
-            ? WidgetHTTPClient(allowedHosts: Set(manifest.networkHosts), log: widgetLog)
+            ? WidgetHTTPClient(
+                allowedHosts: Set(manifest.networkHosts),
+                credentials: credentialSources,
+                log: widgetLog
+            )
             : nil
 
         let context = WidgetContext(
             capabilities: manifest.capabilities,
-            keychain: scopedKeychain,
+            secrets: scopedSecrets,
             http: http,
             log: widgetLog,
             availableWidth: stageWidth

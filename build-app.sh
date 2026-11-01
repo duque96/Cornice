@@ -14,6 +14,9 @@ mkdir -p "${APP_DIR}/Contents/MacOS" "${APP_DIR}/Contents/Resources"
 cp ".build/release/${APP_NAME}" "${APP_DIR}/Contents/MacOS/${APP_NAME}"
 cp "Resources/Info.plist" "${APP_DIR}/Contents/Info.plist"
 
+mkdir -p "${APP_DIR}/Contents/Resources/Widgets"
+cp -R BundledWidgets/. "${APP_DIR}/Contents/Resources/Widgets/"
+
 # Firma ad-hoc: suficiente para ejecutarlo localmente.
 codesign --force --sign - "${APP_DIR}"
 

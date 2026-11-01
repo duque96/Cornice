@@ -14,17 +14,12 @@ let package = Package(
         .target(name: "CorniceKit"),
         .target(name: "CorniceCore"),
         .target(name: "CorniceHost", dependencies: ["CorniceCore", "CorniceKit"]),
-        .target(
-            name: "ExampleWidgetWidget",
-            dependencies: ["CorniceKit"],
-            path: "Widgets/ExampleWidget"
-        ),
         .executableTarget(
             name: "CorniceApp",
-            dependencies: ["CorniceCore", "CorniceHost", "ExampleWidgetWidget"]
+            dependencies: ["CorniceCore", "CorniceHost"]
         ),
         .testTarget(name: "CorniceCoreTests", dependencies: ["CorniceCore"]),
-        .testTarget(name: "CorniceKitTests", dependencies: ["CorniceKit", "ExampleWidgetWidget"]),
+        .testTarget(name: "CorniceKitTests", dependencies: ["CorniceKit"]),
         .testTarget(name: "CorniceHostTests", dependencies: ["CorniceHost", "CorniceKit"]),
     ]
 )

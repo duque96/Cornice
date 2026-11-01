@@ -33,6 +33,42 @@ public enum HostPolicy {
     }
 }
 
+// MARK: - Credentials
+
+public struct CredentialSource: Sendable {
+    public let rule: CredentialRule
+    public let secrets: any SecretAccessing
+
+    public init(rule: CredentialRule, secrets: any SecretAccessing) {
+        self.rule = rule
+        self.secrets = secrets
+    }
+}
+
+public enum CredentialInjector {
+    /// Adds the declared header for a matching host. Existing headers win.
+    public static func apply(
+        _ headers: [String: String],
+        host: String,
+        sources: [CredentialSource]
+    ) -> [String: String] {
+        var result = headers
+
+        for source in sources where HostPolicy.isAllowed(host, in: [source.rule.host]) {
+            guard result[source.rule.header] == nil,
+                  let secret = source.secrets.secret(
+                    service: source.rule.service,
+                    account: source.rule.account
+                  )
+            else { continue }
+
+            result[source.rule.header] = source.rule.prefix + secret
+        }
+
+        return result
+    }
+}
+
 // MARK: - Client
 
 /// Concrete `HTTPClient` handed to widgets that declare `.network`.
@@ -41,17 +77,20 @@ public enum HostPolicy {
 /// refuses any host the manifest did not declare.
 public actor WidgetHTTPClient: HTTPClient {
     private let allowedHosts: Set<String>
+    private let credentials: [CredentialSource]
     private let log: WidgetLog
     private let session: URLSession
     private var limiter: RateLimiter
 
     public init(
         allowedHosts: Set<String>,
+        credentials: [CredentialSource] = [],
         requestsPerMinute: Int = 30,
         log: WidgetLog,
         session: URLSession = .shared
     ) {
         self.allowedHosts = allowedHosts
+        self.credentials = credentials
         self.log = log
         self.session = session
         self.limiter = RateLimiter(limit: requestsPerMinute, window: 60)
@@ -70,10 +109,12 @@ public actor WidgetHTTPClient: HTTPClient {
             throw HTTPError.rateLimited
         }
 
+        let headers = CredentialInjector.apply(request.headers, host: host, sources: credentials)
+
         var urlRequest = URLRequest(url: request.url)
         urlRequest.httpMethod = request.method
         urlRequest.timeoutInterval = request.timeout
-        for (key, value) in request.headers {
+        for (key, value) in headers {
             urlRequest.setValue(value, forHTTPHeaderField: key)
         }
 
@@ -93,12 +134,12 @@ public actor WidgetHTTPClient: HTTPClient {
 
 // MARK: - Scoped Keychain
 
-/// Narrows the Keychain to the services the manifest declared.
-public struct ScopedKeychain: KeychainAccessing {
-    private let base: any KeychainAccessing
+/// Narrows secret access to the services the manifest declared.
+public struct ScopedSecrets: SecretAccessing {
+    private let base: any SecretAccessing
     private let allowedServices: Set<String>
 
-    public init(base: any KeychainAccessing, allowedServices: Set<String>) {
+    public init(base: any SecretAccessing, allowedServices: Set<String>) {
         self.base = base
         self.allowedServices = allowedServices
     }

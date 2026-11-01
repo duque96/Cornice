@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Read access to the Keychain, granted to widgets that declare `.keychain`.
-public protocol KeychainAccessing: Sendable {
+public protocol SecretAccessing: Sendable {
     func secret(service: String, account: String) -> String?
 }
 
@@ -23,7 +23,7 @@ public struct WidgetLog: Sendable {
 public struct WidgetContext {
     public let capabilities: Set<Capability>
     /// `nil` when the widget did not declare `.keychain`.
-    public let keychain: (any KeychainAccessing)?
+    public let secrets: (any SecretAccessing)?
     /// `nil` when the widget did not declare `.network`.
     public let http: (any HTTPClient)?
     public let log: WidgetLog
@@ -32,13 +32,13 @@ public struct WidgetContext {
 
     public init(
         capabilities: Set<Capability>,
-        keychain: (any KeychainAccessing)?,
+        secrets: (any SecretAccessing)?,
         http: (any HTTPClient)?,
         log: WidgetLog,
         availableWidth: CGFloat
     ) {
         self.capabilities = capabilities
-        self.keychain = keychain
+        self.secrets = secrets
         self.http = http
         self.log = log
         self.availableWidth = availableWidth

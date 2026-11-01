@@ -2,7 +2,6 @@ import AppKit
 import SwiftUI
 import CorniceCore
 import CorniceHost
-import ExampleWidgetWidget
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -27,7 +26,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Import the legacy plain-text key once, so widgets only need the Keychain.
         LegacyCredentials.migrateLegacyKeyIfNeeded()
 
-        let host = WidgetHost(factories: [ExampleWidgetWidgetFactory()])
+        // Widgets shipped inside the app land in Application Support on first run.
+        if let bundled = WidgetInstaller.bundledWidgetsURL {
+            WidgetInstaller.installBundledWidgets(from: bundled, into: WidgetPaths.widgetsDirectory)
+        }
+
+        let host = WidgetHost(factories: [])
         host.start()
         widgetHost = host
 

@@ -40,17 +40,33 @@ public struct DiskWidgetManifest: Decodable, Sendable {
     let version: String
     let apiVersion: Int
     let capabilities: [String]?
+    struct CredentialDTO: Decodable, Sendable {
+        struct KeychainRefDTO: Decodable, Sendable {
+            let service: String
+            let account: String
+        }
+
+        let host: String
+        let header: String?
+        let prefix: String?
+        let keychain: KeychainRefDTO
+    }
+
     let networkHosts: [String]?
     let keychainServices: [String]?
+    let credentials: [CredentialDTO]?
     let placement: PlacementDTO?
     let refresh: RefreshDTO?
     let entry: String?
+    let defaultEnabled: Bool?
 }
 
 public struct DiskWidget: Sendable {
     public let manifest: WidgetManifest
     public let directory: URL
     public let entry: URL
+    /// First-party bundles shipped with the app can opt into being on by default.
+    public let defaultEnabled: Bool
 }
 
 public enum DiskWidgetError: LocalizedError, Equatable {
@@ -173,6 +189,16 @@ public enum WidgetBundleStore {
             refresh = .manual
         }
 
+        let credentials = (dto.credentials ?? []).map { credential in
+            CredentialRule(
+                host: credential.host,
+                header: credential.header ?? "Authorization",
+                prefix: credential.prefix ?? "Bearer ",
+                service: credential.keychain.service,
+                account: credential.keychain.account
+            )
+        }
+
         let manifest = WidgetManifest(
             id: dto.id,
             name: dto.name,
@@ -181,6 +207,7 @@ public enum WidgetBundleStore {
             capabilities: Set(capabilities),
             networkHosts: dto.networkHosts ?? [],
             keychainServices: dto.keychainServices ?? [],
+            credentials: credentials,
             placement: placement,
             refresh: refresh
         )
@@ -201,7 +228,12 @@ public enum WidgetBundleStore {
             throw DiskWidgetError.missingEntry(entryName)
         }
 
-        return DiskWidget(manifest: manifest, directory: root, entry: entry)
+        return DiskWidget(
+            manifest: manifest,
+            directory: root,
+            entry: entry,
+            defaultEnabled: dto.defaultEnabled ?? false
+        )
     }
 
     private static func parseVersion(_ raw: String) -> SemanticVersion? {
@@ -255,9 +287,18 @@ public enum WidgetBundleStore {
 
 public struct WidgetPreferences: Codable, Sendable, Equatable {
     public var enabledDiskWidgets: [WidgetID] = []
+    public var disabledDiskWidgets: [WidgetID] = []
     public var disabledBuiltIns: [WidgetID] = []
 
     public init() {}
+
+    /// Tolerates files written before a field existed.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        enabledDiskWidgets = try container.decodeIfPresent([String].self, forKey: .enabledDiskWidgets) ?? []
+        disabledDiskWidgets = try container.decodeIfPresent([String].self, forKey: .disabledDiskWidgets) ?? []
+        disabledBuiltIns = try container.decodeIfPresent([String].self, forKey: .disabledBuiltIns) ?? []
+    }
 }
 
 @MainActor
@@ -273,10 +314,13 @@ public final class WidgetPreferencesStore {
 
     public var current: WidgetPreferences { preferences }
 
-    public func isEnabled(_ id: WidgetID, builtIn: Bool) -> Bool {
-        builtIn
-            ? !preferences.disabledBuiltIns.contains(id)
-            : preferences.enabledDiskWidgets.contains(id)
+    public func isEnabled(_ id: WidgetID, builtIn: Bool, defaultEnabled: Bool = false) -> Bool {
+        if builtIn {
+            return !preferences.disabledBuiltIns.contains(id)
+        }
+        if preferences.disabledDiskWidgets.contains(id) { return false }
+        if preferences.enabledDiskWidgets.contains(id) { return true }
+        return defaultEnabled
     }
 
     public func setEnabled(_ id: WidgetID, builtIn: Bool, _ enabled: Bool) {
@@ -285,7 +329,12 @@ public final class WidgetPreferencesStore {
             if !enabled { preferences.disabledBuiltIns.append(id) }
         } else {
             preferences.enabledDiskWidgets.removeAll { $0 == id }
-            if enabled { preferences.enabledDiskWidgets.append(id) }
+            preferences.disabledDiskWidgets.removeAll { $0 == id }
+            if enabled {
+                preferences.enabledDiskWidgets.append(id)
+            } else {
+                preferences.disabledDiskWidgets.append(id)
+            }
         }
         save()
     }

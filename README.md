@@ -8,28 +8,41 @@ A modular host for the MacBook notch. The notch becomes a surface for widgets, a
 
 ## Status
 
-**M4 — widgets from disk.** The surface, the options window, the SDK, the host and the
-first widget all work. Widgets are no longer compiled in: drop a `*.cornicewidget` bundle
-in Application Support and enable it from Options.
+**M5 — the Example widget is a disk widget.** Nothing about it is compiled in anymore: it
+ships as a bundled `.cornicewidget` (HTML/JS), authenticates through host-injected
+credentials and is installed into Application Support on first run.
 
 | Milestone | Content | Done |
 |---|---|---|
 | M0 | Surface, geometry, state machine | ✅ |
 | M1 | Options window, persisted settings | ✅ |
 | M2 | `CorniceKit` SDK + `CorniceHost` (mount, clock, capabilities) | ✅ |
-| M3 | First widget: Example Widget usage | ✅ |
+| M3 | First widget: Example Widget usage (native) | ✅ |
 | M4 | Widgets from disk (HTML/JS in a sandbox) + gallery | ✅ |
-| M5 | Layout solver with pages, native bundle loading with signatures | — |
+| M5 | Example Widget ported to a bundled disk widget + credential injection | ✅ |
+| M6 | Layout solver with pages, native bundles with signatures | — |
 
-## The first widget
+## The Example Widget widget
 
-`Widgets/ExampleWidget` shows the three usage windows (5h rolling, weekly, monthly) with
-per-window color thresholds, a progress bar and the time until reset. It refreshes
-every 60 s **only while the panel is visible**, and retries every 20 s after a failure.
+`BundledWidgets/ExampleWidget.cornicewidget` is the reference implementation of a disk
+widget. It shows the three usage windows (5h rolling, weekly, monthly) with color
+thresholds, a progress bar and the time until reset, refreshing every 60 s **only while the
+panel is visible**.
 
-It only ever reads Cornice's Keychain item (`com.duque.cornice` / `opencode-api-key`).
-At launch, Cornice imports `~/.config/example-usage/key` into that item once: no prompts
-and no cross-app Keychain access.
+It never sees the API key. The manifest declares a credential:
+
+```json
+"credentials": [
+  { "host": "example.com", "header": "Authorization", "prefix": "Bearer ",
+    "keychain": { "service": "com.duque.cornice", "account": "opencode-api-key" } }
+]
+```
+
+and the host attaches the header on the way out. The secret is imported once from
+`~/.config/example-usage/key` and stored at
+`~/Library/Application Support/Cornice/secrets/com.duque.cornice/opencode-api-key` with
+mode `0600`. It is a file rather than a Keychain item on purpose: ad-hoc signed builds
+change signature on every rebuild, and macOS would re-prompt on each one.
 
 ## Widgets from disk
 
@@ -47,11 +60,17 @@ ClockWidget.cornicewidget/
   "name": "Clock",
   "version": "1.0.0",
   "apiVersion": 1,
-  "capabilities": ["network"],
+  "capabilities": ["network", "keychain"],
   "networkHosts": ["example.com"],
+  "keychainServices": ["com.duque.cornice"],
+  "credentials": [
+    { "host": "example.com", "header": "Authorization", "prefix": "Bearer ",
+      "keychain": { "service": "com.duque.cornice", "account": "example-token" } }
+  ],
   "placement": { "columns": 6, "rows": 3 },
   "refresh": { "interval": 60 },
-  "entry": "index.html"
+  "entry": "index.html",
+  "defaultEnabled": false
 }
 ```
 
@@ -62,8 +81,10 @@ const res = await cornice.fetch("https://example.com/data.json"); // { status, t
 cornice.onTick((timestamp) => { /* once per second while visible */ });
 ```
 
-Disk widgets start **disabled**: enable them in *Options → Widgets*, where you can also
-reveal the folder and reload. They run in a `WKWebView` with a non-persistent data store,
+Disk widgets start **disabled** unless the manifest sets `defaultEnabled`. Enable them in
+*Options → Widgets*, where you can also reveal the folder and reload. Widgets shipped in
+the app bundle (`BundledWidgets/`) are installed on first run and replaced automatically
+when their version increases; your own folders are never overwritten. They run in a `WKWebView` with a non-persistent data store,
 no file access, no Keychain, no `URLSession`, and navigation confined to the bundle. The
 only way out is `cornice.fetch`, which goes through the same host allow-list and rate limit
 as native widgets.
@@ -77,15 +98,13 @@ A widget declares what it needs in its manifest; the host decides what it actual
 | Capability | Injected as | Enforced by |
 |---|---|---|
 | `.network` | `WidgetContext.http` | host allow-list (`networkHosts`, exact host or subdomain) and 30 requests/minute |
-| `.keychain` | `WidgetContext.keychain` | scoped to `keychainServices`; any other service returns `nil` |
+| `.keychain` | `WidgetContext.secrets` + credential injection | scoped to `keychainServices`; other services return `nil`, and the secret is attached host-side |
+| credentials | `Authorization` (or the declared header) | only for `credential.host`, only for the declared service/account; the value never reaches JS |
 
-No capability means no object: `context.http` and `context.keychain` are `nil`, and the
-manifest is rejected at mount time if it declares a capability without its allow-list.
-
-The contract is also checked at build time: `testWidgetSourcesDoNotBypassTheHost` fails if
-any file under `Widgets/` mentions `URLSession`, `FileManager`, `SecItem`, `NSWorkspace`,
-`NSPasteboard` or `Process(`. An in-process Swift widget could technically bypass the host,
-so this test is what keeps first-party widgets honest until the JS runtime lands.
+No capability means no object: `context.http` and `context.secrets` are `nil`, and the
+manifest is rejected at mount time if it declares a capability without its allow-list, if a
+credential points to a service outside `keychainServices`, or to a host outside
+`networkHosts`.
 
 ## Run it
 
@@ -132,10 +151,10 @@ Sources/
   CorniceKit/       # public SDK: manifests, capabilities, CorniceWidget
   CorniceHost/      # mounting, clock, capabilities, disk loader, web sandbox
   CorniceApp/       # @main, composition root
-Widgets/
-  ExampleWidget/    # first widget (compiled in)
+BundledWidgets/
+  ExampleWidget.cornicewidget/   # ships with the app
 Examples/
-  ClockWidget.cornicewidget/
+  ClockWidget.cornicewidget/     # drop-in demo
 Tests/
 ```
 

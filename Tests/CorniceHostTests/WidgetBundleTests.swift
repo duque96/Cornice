@@ -18,9 +18,10 @@ final class WidgetBundleTests: XCTestCase {
     private func makeBundle(
         named name: String,
         manifest: String,
-        entry: String? = "<html></html>"
+        entry: String? = "<html></html>",
+        in base: URL? = nil
     ) throws -> URL {
-        let directory = root.appendingPathComponent("\(name).cornicewidget", isDirectory: true)
+        let directory = (base ?? root).appendingPathComponent("\(name).cornicewidget", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try manifest.write(
             to: directory.appendingPathComponent("manifest.json"),
@@ -137,5 +138,96 @@ final class WidgetBundleTests: XCTestCase {
         let second = WidgetPreferencesStore(url: url)
         XCTAssertTrue(second.isEnabled("com.example.hello", builtIn: false))
         XCTAssertFalse(second.isEnabled("com.example.status", builtIn: true))
+    }
+
+    @MainActor
+    func testDefaultEnabledWidgetsStayOnUntilDisabled() {
+        let url = root.appendingPathComponent("widgets.json")
+        let preferences = WidgetPreferencesStore(url: url)
+
+        XCTAssertTrue(preferences.isEnabled("com.example.status", builtIn: false, defaultEnabled: true))
+
+        preferences.setEnabled("com.example.status", builtIn: false, false)
+        XCTAssertFalse(preferences.isEnabled("com.example.status", builtIn: false, defaultEnabled: true))
+
+        let reloaded = WidgetPreferencesStore(url: url)
+        XCTAssertFalse(reloaded.isEnabled("com.example.status", builtIn: false, defaultEnabled: true))
+    }
+
+    func testBundledExampleWidgetIsValid() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let bundle = root.appendingPathComponent("BundledWidgets/ExampleWidget.cornicewidget")
+
+        let widget = try WidgetBundleStore.load(bundleAt: bundle)
+
+        XCTAssertEqual(widget.manifest.id, "com.example.status")
+        XCTAssertTrue(widget.defaultEnabled)
+        XCTAssertEqual(widget.manifest.capabilities, [.network, .keychain])
+        XCTAssertEqual(widget.manifest.networkHosts, ["example.com"])
+        XCTAssertEqual(widget.manifest.credentials.count, 1)
+
+        let credential = try XCTUnwrap(widget.manifest.credentials.first)
+        XCTAssertEqual(credential.host, "example.com")
+        XCTAssertEqual(credential.header, "Authorization")
+        XCTAssertEqual(credential.prefix, "Bearer ")
+        XCTAssertEqual(credential.service, "com.duque.cornice")
+    }
+
+    // MARK: - Bundled installation
+
+    func testInstallerCopiesBundlesOnFirstRun() throws {
+        let source = root.appendingPathComponent("source", isDirectory: true)
+        let destination = root.appendingPathComponent("destination", isDirectory: true)
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        _ = try makeBundle(named: "Hello", manifest: manifest(), in: source)
+
+        let installed = WidgetInstaller.installBundledWidgets(from: source, into: destination)
+
+        XCTAssertEqual(installed, ["com.example.hello"])
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: destination.appendingPathComponent("Hello.cornicewidget/manifest.json").path
+            )
+        )
+    }
+
+    func testInstallerUpgradesANewerBundledVersion() throws {
+        let source = root.appendingPathComponent("source", isDirectory: true)
+        let destination = root.appendingPathComponent("destination", isDirectory: true)
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+
+        _ = try makeBundle(named: "Hello", manifest: manifest(version: "1.0.0"), in: source)
+        WidgetInstaller.installBundledWidgets(from: source, into: destination)
+
+        _ = try makeBundle(named: "Hello", manifest: manifest(version: "1.1.0"), in: source)
+        let installed = WidgetInstaller.installBundledWidgets(from: source, into: destination)
+
+        XCTAssertEqual(installed, ["com.example.hello"])
+
+        let updated = try WidgetBundleStore.load(
+            bundleAt: destination.appendingPathComponent("Hello.cornicewidget")
+        )
+        XCTAssertEqual(updated.manifest.version, SemanticVersion(1, 1, 0))
+    }
+
+    func testInstallerLeavesAnOlderOrEqualBundleAlone() throws {
+        let source = root.appendingPathComponent("source", isDirectory: true)
+        let destination = root.appendingPathComponent("destination", isDirectory: true)
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+
+        _ = try makeBundle(named: "Hello", manifest: manifest(version: "2.0.0"), in: source)
+        WidgetInstaller.installBundledWidgets(from: source, into: destination)
+
+        let marker = destination.appendingPathComponent("Hello.cornicewidget/user-edit.txt")
+        try "keep me".write(to: marker, atomically: true, encoding: .utf8)
+
+        _ = try makeBundle(named: "Hello", manifest: manifest(version: "2.0.0"), in: source)
+        let installed = WidgetInstaller.installBundledWidgets(from: source, into: destination)
+
+        XCTAssertTrue(installed.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: marker.path))
     }
 }

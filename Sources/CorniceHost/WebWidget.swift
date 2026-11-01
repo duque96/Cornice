@@ -164,6 +164,7 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
             guard let self else { return }
             do {
                 let response = try await http.send(request)
+                self.log.warn("fetch \(url.host ?? "") -> \(response.status)")
                 let text = String(data: response.body, encoding: .utf8) ?? ""
                 self.respond(id: id, payload: ["ok": true, "status": response.status, "text": text])
             } catch {
