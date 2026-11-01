@@ -127,9 +127,12 @@ default 420×170 panel. Raise the panel height in *Options → Panel* for larger
 ## The Status widget
 
 `BundledWidgets/Status.cornicewidget` reads `http://192.0.2.10:8123/api/overview`
-(the Proxmox dashboard) and renders CPU, RAM and root-disk bars plus guests, hottest
-temperature and WiFi signal. Green below 70%, amber above, red above 90%; the dot goes
-amber when the dashboard cannot be reached.
+(the Proxmox dashboard) and renders four bars — CPU, RAM, root disk and the USB backup
+storage — plus guests, hottest temperature, WiFi signal and live network rates
+(`↓6.3 ↑6.0 MB/s`). Green below 70%, amber above, red above 90%; the guests count turns
+amber if one is down, and the dot goes amber when the dashboard cannot be reached.
+
+Settings can hide the backup bar, the traffic line or the whole footer.
 
 It is the first widget that needed local networking, so the app declares:
 
