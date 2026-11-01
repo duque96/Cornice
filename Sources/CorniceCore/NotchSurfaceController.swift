@@ -21,6 +21,7 @@ public final class NotchSurfaceController {
 
     private let settings: SettingsStore
     private let geometryProvider: NotchGeometryProviding
+    public let pager: StagePager
     private let model: NotchSurfaceModel
     private let panel: NotchPanel
     private let hostingView: SurfaceHostingView
@@ -35,13 +36,16 @@ public final class NotchSurfaceController {
     private var isVisible = false
     /// Pinned surfaces ignore hover: used by the options window to preview changes.
     private var isPinned = false
+    private var pageGesture = PagerGestureAccumulator()
 
     public init(
         settings: SettingsStore,
-        geometryProvider: NotchGeometryProviding = AutomaticNotchGeometry()
+        geometryProvider: NotchGeometryProviding = AutomaticNotchGeometry(),
+        pager: StagePager = StagePager()
     ) {
         self.settings = settings
         self.geometryProvider = geometryProvider
+        self.pager = pager
 
         let initial = NotchSurfaceModel(
             notchSize: NotchGeometryMath.defaultNotchSize,
@@ -340,6 +344,38 @@ public final class NotchSurfaceController {
 
         if let local = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved], handler: localHandler) {
             monitors.append(local)
+        }
+
+        // Trackpad swipe pages the stage while the surface is open.
+        let scrollHandler: (NSEvent) -> NSEvent? = { [weak self] event in
+            MainActor.assumeIsolated {
+                self?.handleScroll(event)
+            }
+            return event
+        }
+
+        if let scroll = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel], handler: scrollHandler) {
+            monitors.append(scroll)
+        }
+    }
+
+    private func handleScroll(_ event: NSEvent) {
+        guard model.state == .open,
+              pager.pageCount > 1,
+              let expanded = expandedRect,
+              expanded.contains(NSEvent.mouseLocation)
+        else { return }
+
+        if event.phase == .ended || event.momentumPhase == .ended {
+            pageGesture.reset()
+            return
+        }
+
+        // Only horizontal intent; vertical scrolling stays with the content.
+        guard abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) else { return }
+
+        if let step = pageGesture.feed(deltaX: event.scrollingDeltaX, now: Date()) {
+            pager.advance(step)
         }
     }
 

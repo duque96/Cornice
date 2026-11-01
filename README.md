@@ -20,7 +20,7 @@ pages, instead of being stacked in a list. `placement` finally means something.
 | M4 | Widgets from disk (HTML/JS in a sandbox) + gallery | ✅ |
 | M5 | Example Widget ported to a bundled disk widget + credential injection | ✅ |
 | M6 | Sidebar options window + declarative widget settings | ✅ |
-| M7 | 6-column grid with pages | ✅ |
+| M7 | 6-column grid with pages and trackpad swipe | ✅ |
 | M8 | Native bundles with signatures, drag to reorder | — |
 
 ## The Example Widget widget
@@ -97,7 +97,8 @@ The Clock widget ships with the app (installed disabled): enable it in *Options 
 The stage is a **6-column grid**: `placement.columns` is a span (1–6) and
 `placement.rows` sets the height (30 pt per row plus 8 pt gaps). Widgets flow left to
 right and wrap to the next row; when a row does not fit vertically, the rest goes to a new
-page and dots appear at the bottom.
+page and dots appear at the bottom. Pages change with a horizontal trackpad swipe or by
+clicking a dot.
 
 ```
 ┌─────────────┬─────────────┐

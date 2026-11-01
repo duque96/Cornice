@@ -1,20 +1,21 @@
 import SwiftUI
+import CorniceCore
 import CorniceKit
 
 /// The stage: widgets placed on a grid, with page dots when they do not all fit.
 public struct WidgetAreaView: View {
     private var host: WidgetHost
+    private var pager: StagePager
 
-    @State private var pageIndex = 0
-
-    public init(host: WidgetHost) {
+    public init(host: WidgetHost, pager: StagePager = StagePager()) {
         self.host = host
+        self.pager = pager
     }
 
     public var body: some View {
         GeometryReader { proxy in
             let pages = makePages(in: proxy.size)
-            let index = min(pageIndex, max(0, pages.count - 1))
+            let index = min(pager.index, max(0, pages.count - 1))
 
             VStack(spacing: 6) {
                 ZStack(alignment: .topLeading) {
@@ -35,6 +36,10 @@ public struct WidgetAreaView: View {
                 if pages.count > 1 {
                     dots(count: pages.count, selection: index)
                 }
+            }
+            .onAppear { pager.setPageCount(pages.count) }
+            .onChange(of: pages.count) { _, count in
+                pager.setPageCount(count)
             }
         }
     }
@@ -77,7 +82,7 @@ public struct WidgetAreaView: View {
         HStack(spacing: 5) {
             ForEach(0..<count, id: \.self) { index in
                 Button {
-                    pageIndex = index
+                    pager.index = index
                 } label: {
                     Circle()
                         .fill(Color.white.opacity(index == selection ? 0.7 : 0.22))

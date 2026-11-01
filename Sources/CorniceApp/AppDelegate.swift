@@ -19,7 +19,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             : AutomaticNotchGeometry()
 
         let settings = SettingsStore()
-        let controller = NotchSurfaceController(settings: settings, geometryProvider: provider)
+        let pager = StagePager()
+        let controller = NotchSurfaceController(
+            settings: settings,
+            geometryProvider: provider,
+            pager: pager
+        )
         controller.start()
         self.controller = controller
 
@@ -35,7 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         host.start()
         widgetHost = host
 
-        controller.widgetContent = AnyView(WidgetAreaView(host: host))
+        controller.widgetContent = AnyView(WidgetAreaView(host: host, pager: pager))
         controller.onStateChanged = { [weak host] state in
             host?.setActive(state == .open)
         }
