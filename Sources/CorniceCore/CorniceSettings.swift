@@ -16,7 +16,7 @@ public struct CorniceSettings: Codable, Sendable, Equatable {
         hoverOpenDelay: Double = 0.11,
         hoverCloseDelay: Double = 0.32,
         expandedWidth: Double = 420,
-        expandedHeight: Double = 190
+        expandedHeight: Double = 170
     ) {
         self.motion = motion
         self.hoverOpenDelay = hoverOpenDelay

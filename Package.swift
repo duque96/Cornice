@@ -8,10 +8,22 @@ let package = Package(
     products: [
         .executable(name: "Cornice", targets: ["CorniceApp"]),
         .library(name: "CorniceCore", targets: ["CorniceCore"]),
+        .library(name: "CorniceKit", targets: ["CorniceKit"]),
     ],
     targets: [
+        .target(name: "CorniceKit"),
         .target(name: "CorniceCore"),
-        .executableTarget(name: "CorniceApp", dependencies: ["CorniceCore"]),
+        .target(name: "CorniceHost", dependencies: ["CorniceCore", "CorniceKit"]),
+        .target(
+            name: "ExampleWidgetWidget",
+            dependencies: ["CorniceKit"],
+            path: "Widgets/ExampleWidget"
+        ),
+        .executableTarget(
+            name: "CorniceApp",
+            dependencies: ["CorniceCore", "CorniceHost", "ExampleWidgetWidget"]
+        ),
         .testTarget(name: "CorniceCoreTests", dependencies: ["CorniceCore"]),
+        .testTarget(name: "CorniceKitTests", dependencies: ["CorniceKit", "ExampleWidgetWidget"]),
     ]
 )

@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 /// Owns the panel, the state machine and the pointer tracking.
 ///
@@ -7,6 +8,15 @@ import AppKit
 public final class NotchSurfaceController {
     public var onOpenSettings: (() -> Void)? {
         didSet { model.onOpenSettings = onOpenSettings }
+    }
+
+    /// Called whenever the surface changes state, so the app can start or stop
+    /// widget work with visibility.
+    public var onStateChanged: ((NotchState) -> Void)?
+
+    /// Stage content injected by the app (the widget area).
+    public var widgetContent: AnyView? {
+        didSet { model.widgetContent = widgetContent }
     }
 
     private let settings: SettingsStore
@@ -222,6 +232,8 @@ public final class NotchSurfaceController {
         if newState != .open {
             updateFrame(animated: true)
         }
+
+        onStateChanged?(newState)
     }
 
     private func debugLog(_ message: String) {

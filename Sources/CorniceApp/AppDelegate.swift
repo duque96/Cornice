@@ -1,10 +1,14 @@
 import AppKit
+import SwiftUI
 import CorniceCore
+import CorniceHost
+import ExampleWidgetWidget
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var controller: NotchSurfaceController?
     private var settingsWindow: SettingsWindowController?
+    private var widgetHost: WidgetHost?
     private var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -19,6 +23,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let controller = NotchSurfaceController(settings: settings, geometryProvider: provider)
         controller.start()
         self.controller = controller
+
+        let host = WidgetHost(factories: [ExampleWidgetWidgetFactory.self])
+        host.start()
+        widgetHost = host
+
+        controller.widgetContent = AnyView(WidgetAreaView(host: host))
+        controller.onStateChanged = { [weak host] state in
+            host?.setActive(state == .open)
+        }
 
         settings.onChange = { [weak controller] in
             controller?.applySettings()

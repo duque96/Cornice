@@ -77,6 +77,8 @@ public final class NotchSurfaceModel {
     public var motion: NotchMotion
     /// Set by the controller: lets the panel draw a settings button.
     @ObservationIgnored public var onOpenSettings: (() -> Void)?
+    /// The stage content injected by the app (the widget area).
+    @ObservationIgnored public var widgetContent: AnyView?
 
     public init(
         notchSize: CGSize,

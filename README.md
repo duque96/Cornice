@@ -8,18 +8,33 @@ A modular host for the MacBook notch. The notch becomes a surface for widgets, a
 
 ## Status
 
-**M0 — notch surface.** The panel, geometry, hover state machine and the options window
-work. There are no widgets yet; the expanded surface shows placeholders for where they
-will land.
+**M2 — SDK, host and the first widget.** The surface, the options window and a real widget
+work: Example Widget usage, read from the same API as the ExampleWidget menu bar app.
 
 | Milestone | Content | Done |
 |---|---|---|
 | M0 | Surface, geometry, state machine | ✅ |
-| M1 | Hardware quirks: multi-display, fullscreen, simulated notch polish | — |
-| M2 | `CorniceKit` + host + layout solver | — |
-| M3 | Built-in widgets (Now Playing, Calendar, Shelf) | — |
-| M4 | Settings + widget gallery + capability grants | — |
+| M1 | Options window, persisted settings | ✅ |
+| M2 | `CorniceKit` SDK + `CorniceHost` (mount, clock, capabilities) | ✅ |
+| M3 | First widget: Example Widget usage | ✅ |
+| M4 | More widgets, layout solver with pages, capability grants UI | — |
 | M5 | `CorniceJS` runtime | — |
+
+## The first widget
+
+`Widgets/ExampleWidget` shows the three usage windows (5h rolling, weekly, monthly) with
+per-window color thresholds, a progress bar and the time until reset. It refreshes
+every 60 s **only while the panel is visible**, and retries every 20 s after a failure.
+
+The API key is looked up in this order:
+
+1. Cornice's Keychain item (`com.duque.cornice` / `opencode-api-key`)
+2. `~/.config/example-usage/key`
+3. The Example Usage app's Keychain item (macOS will ask for permission)
+
+It declares only `.network` and `.keychain` in its manifest, and the host gives it those
+and nothing else. The legacy file fallback is a deliberate exception for headless setups:
+there is no capability for arbitrary files yet.
 
 ## Run it
 
@@ -63,12 +78,11 @@ CORNICE_SNAPSHOT_DIR=/tmp/cornice swift test
 ```
 Sources/
   CorniceCore/      # notch geometry, panel, animation, input
-  CorniceKit/       # public SDK contract (no AppKit) — M2
-  CorniceHost/      # registry, layout, scheduler, capability broker — M2
-  CorniceUI/        # settings, widget gallery — M4
-  CorniceJS/        # WKWebView runtime — M5
+  CorniceKit/       # public SDK: manifests, capabilities, CorniceWidget
+  CorniceHost/      # mounting, activation, shared clock, keychain
   CorniceApp/       # @main, composition root
-Widgets/            # built-in widgets — M3
+Widgets/
+  ExampleWidget/    # first widget
 Tests/
 ```
 

@@ -66,65 +66,45 @@ struct NotchSurfaceView: View {
     }
 
     private var content: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(Color.green)
-                    .frame(width: 6, height: 6)
+        VStack(alignment: .leading, spacing: 10) {
+            header
 
-                Text("Cornice")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-
-                Text("M0")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(Color.white.opacity(0.1), in: Capsule())
-                    .foregroundStyle(Color.white.opacity(0.65))
-
-                Spacer(minLength: 0)
-
-                Text(model.mode.rawValue)
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundStyle(Color.white.opacity(0.3))
-
-                Button {
-                    model.onOpenSettings?()
-                } label: {
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.4))
-                }
-                .buttonStyle(.plain)
-                .help("Settings")
+            if let widgetContent = model.widgetContent {
+                widgetContent
+            } else {
+                Text("No widgets installed")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.white.opacity(0.4))
             }
 
-            Text("The notch is live. Widgets land here in M3.")
-                .font(.system(size: 11))
-                .foregroundStyle(Color.white.opacity(0.55))
-
-            HStack(spacing: 10) {
-                placeholderTile("Now Playing")
-                placeholderTile("Calendar")
-                placeholderTile("Shelf")
-            }
+            Spacer(minLength: 0)
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 20)
-        .padding(.top, 16)
+        .padding(.top, 14)
         .frame(width: model.expandedSize.width, height: model.expandedSize.height, alignment: .top)
     }
 
-    private func placeholderTile(_ title: String) -> some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(Color.white.opacity(0.06))
-            .overlay(alignment: .topLeading) {
-                Text(title)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.35))
-                    .padding(10)
+    private var header: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(Color.green)
+                .frame(width: 5, height: 5)
+
+            Text("Cornice")
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+
+            Spacer(minLength: 0)
+
+            Button {
+                model.onOpenSettings?()
+            } label: {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.4))
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
+            .buttonStyle(.plain)
+            .help("Settings")
+        }
     }
 }
