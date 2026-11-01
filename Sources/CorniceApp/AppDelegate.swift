@@ -59,7 +59,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         if ProcessInfo.processInfo.environment["CORNICE_START_OPEN"] == "1" {
-            controller.openImmediately()
+            // Pin it: design review should not depend on where the pointer is.
+            controller.setPinned(true)
         }
 
         installStatusItem()

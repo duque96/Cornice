@@ -8,9 +8,8 @@ A modular host for the MacBook notch. The notch becomes a surface for widgets, a
 
 ## Status
 
-**M6 — a real settings window.** Options is a sidebar of sections, and every widget can
-inject its own page with declarative settings. The Example widget already does: refresh
-interval and monthly visibility.
+**M7 — the stage has a layout.** Widgets are placed on a 6-column grid with rows, gaps and
+pages, instead of being stacked in a list. `placement` finally means something.
 
 | Milestone | Content | Done |
 |---|---|---|
@@ -21,7 +20,8 @@ interval and monthly visibility.
 | M4 | Widgets from disk (HTML/JS in a sandbox) + gallery | ✅ |
 | M5 | Example Widget ported to a bundled disk widget + credential injection | ✅ |
 | M6 | Sidebar options window + declarative widget settings | ✅ |
-| M7 | Layout solver with pages, native bundles with signatures | — |
+| M7 | 6-column grid with pages | ✅ |
+| M8 | Native bundles with signatures, drag to reorder | — |
 
 ## The Example Widget widget
 
@@ -68,7 +68,7 @@ ClockWidget.cornicewidget/
     { "host": "example.com", "header": "Authorization", "prefix": "Bearer ",
       "keychain": { "service": "com.duque.cornice", "account": "example-token" } }
   ],
-  "placement": { "columns": 6, "rows": 3 },
+  "placement": { "columns": 3, "rows": 3 },
   "refresh": { "interval": 60 },
   "entry": "index.html",
   "defaultEnabled": false
@@ -90,7 +90,28 @@ no file access, no Keychain, no `URLSession`, and navigation confined to the bun
 only way out is `cornice.fetch`, which goes through the same host allow-list and rate limit
 as native widgets.
 
-Copy `Examples/ClockWidget.cornicewidget` there to try it.
+The Clock widget ships with the app (installed disabled): enable it in *Options → Widgets*.
+
+## Layout
+
+The stage is a **6-column grid**: `placement.columns` is a span (1–6) and
+`placement.rows` sets the height (30 pt per row plus 8 pt gaps). Widgets flow left to
+right and wrap to the next row; when a row does not fit vertically, the rest goes to a new
+page and dots appear at the bottom.
+
+```
+┌─────────────┬─────────────┐
+│ Example    │ Clock       │   3 + 3 columns, one page
+│ 3×3         │ 3×2         │
+└─────────────┴─────────────┘
+```
+
+`priority` (higher first) decides the order when widgets compete for space. The solver is
+pure and unit-tested: `WidgetGridLayout.layout(widgets:available:)` returns frames, and the
+view only renders them.
+
+The Example widget ships as 3×3 and the Clock as 3×2, so they sit side by side in the
+default 420×170 panel. Raise the panel height in *Options → Panel* for larger widgets.
 
 ## Capabilities
 
@@ -182,9 +203,8 @@ Sources/
   CorniceHost/      # mounting, clock, capabilities, disk loader, web sandbox, settings UI
   CorniceApp/       # @main, composition root, sidebar sections
 BundledWidgets/
-  ExampleWidget.cornicewidget/   # ships with the app
-Examples/
-  ClockWidget.cornicewidget/     # drop-in demo
+  ExampleWidget.cornicewidget/   # ships enabled
+  ClockWidget.cornicewidget/     # ships disabled
 Tests/
 ```
 
