@@ -162,6 +162,24 @@ swift build && swift test      # library + unit tests
 open dist/Cornice.app
 ```
 
+## Install (start at login)
+
+```bash
+./install.sh
+```
+
+It builds, copies the app to `~/Applications/Cornice.app` and loads
+`~/Library/LaunchAgents/com.duque.cornice.plist` (`RunAtLoad`, restart only on crash,
+logs in `~/Library/Logs/Cornice/`). Uninstall with `./uninstall.sh`; settings and widgets
+stay in Application Support.
+
+Cornice is an accessory app (`LSUIElement`): no Dock icon. The menu bar icon is optional
+in *Options → General*, and that page also has Quit. With it off, the app lives only in the
+notch.
+
+After changing code, run `./install.sh` again: the LaunchAgent keeps running the copy in
+`~/Applications`, not `dist/`.
+
 Hover the notch to expand. The status bar icon toggles the surface, opens **Options…**
 (`⌘,`) and quits. The gear inside the expanded panel does the same.
 
