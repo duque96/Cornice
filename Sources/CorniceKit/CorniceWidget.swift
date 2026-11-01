@@ -26,6 +26,8 @@ public struct WidgetContext {
     public let secrets: (any SecretAccessing)?
     /// `nil` when the widget did not declare `.network`.
     public let http: (any HTTPClient)?
+    /// Resolved settings (defaults merged with what the user saved).
+    public let settings: WidgetSettings
     public let log: WidgetLog
     /// Panel width the host is giving the stage, so widgets can size themselves.
     public let availableWidth: CGFloat
@@ -34,12 +36,14 @@ public struct WidgetContext {
         capabilities: Set<Capability>,
         secrets: (any SecretAccessing)?,
         http: (any HTTPClient)?,
+        settings: WidgetSettings,
         log: WidgetLog,
         availableWidth: CGFloat
     ) {
         self.capabilities = capabilities
         self.secrets = secrets
         self.http = http
+        self.settings = settings
         self.log = log
         self.availableWidth = availableWidth
     }

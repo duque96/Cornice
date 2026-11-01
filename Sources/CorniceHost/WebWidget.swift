@@ -48,11 +48,13 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
 
     private let bundle: DiskWidget
     private let http: (any HTTPClient)?
+    private let settings: WidgetSettings
     private let log: WidgetLog
 
     init(bundle: DiskWidget, context: WidgetContext) {
         self.bundle = bundle
         self.http = context.http
+        self.settings = context.settings
         self.log = context.log
 
         let configuration = WKWebViewConfiguration()
@@ -75,6 +77,13 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         )
         controller.addUserScript(
             WKUserScript(
+                source: Self.settingsScript(context.settings),
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true
+            )
+        )
+        controller.addUserScript(
+            WKUserScript(
                 source: Self.styleScript,
                 injectionTime: .atDocumentEnd,
                 forMainFrameOnly: true
@@ -84,6 +93,7 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         webView.navigationDelegate = self
         webView.underPageBackgroundColor = .clear
         webView.setValue(false, forKey: "drawsBackground")
+        log.warn("settings \(context.settings.values)")
         webView.loadFileURL(bundle.entry, allowingReadAccessTo: bundle.directory)
     }
 
@@ -230,6 +240,13 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
       };
     })();
     """
+
+    private static func settingsScript(_ settings: WidgetSettings) -> String {
+        let payload = settings.values.mapValues(\.jsonObject)
+        let data = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data("{}".utf8)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return "window.cornice = window.cornice || {}; window.cornice.settings = \(json);"
+    }
 
     private static let styleScript = """
     (function () {

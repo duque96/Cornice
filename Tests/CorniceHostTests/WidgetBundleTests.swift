@@ -230,4 +230,108 @@ final class WidgetBundleTests: XCTestCase {
         XCTAssertTrue(installed.isEmpty)
         XCTAssertTrue(FileManager.default.fileExists(atPath: marker.path))
     }
+
+    // MARK: - Widget settings
+
+    private func settingsManifest() -> WidgetManifest {
+        WidgetManifest(
+            id: "com.example.settings",
+            name: "Settings",
+            version: SemanticVersion(1, 0, 0),
+            settings: [
+                WidgetSetting(
+                    id: "refresh",
+                    title: "Refresh",
+                    kind: .number(min: 30, max: 600, step: 10),
+                    defaultValue: .number(60)
+                ),
+                WidgetSetting(
+                    id: "flag",
+                    title: "Flag",
+                    kind: .toggle,
+                    defaultValue: .bool(true)
+                ),
+            ],
+            placement: Placement(size: GridSize(columns: 2, rows: 1))
+        )
+    }
+
+    @MainActor
+    func testWidgetSettingsStartFromDefaults() {
+        let store = WidgetSettingsStore(root: root.appendingPathComponent("settings"))
+        let manifest = settingsManifest()
+
+        store.prepare(manifest)
+        let values = store.values(for: manifest)
+
+        XCTAssertEqual(values["refresh"], .number(60))
+        XCTAssertEqual(values["flag"], .bool(true))
+    }
+
+    @MainActor
+    func testWidgetSettingsClampAndPersist() {
+        let settingsRoot = root.appendingPathComponent("settings")
+        let manifest = settingsManifest()
+
+        let store = WidgetSettingsStore(root: settingsRoot)
+        store.prepare(manifest)
+        store.set(.number(9_000), for: "refresh", of: manifest)
+        store.set(.bool(false), for: "flag", of: manifest)
+
+        XCTAssertEqual(store.values(for: manifest)["refresh"], .number(600))
+
+        let reloaded = WidgetSettingsStore(root: settingsRoot)
+        reloaded.prepare(manifest)
+
+        XCTAssertEqual(reloaded.values(for: manifest)["refresh"], .number(600))
+        XCTAssertEqual(reloaded.values(for: manifest)["flag"], .bool(false))
+    }
+
+    func testParsesSettingsFromDisk() throws {
+        let manifestJSON = """
+        {
+          "id": "com.example.tuned",
+          "name": "Tuned",
+          "version": "1.0.0",
+          "apiVersion": 1,
+          "capabilities": [],
+          "placement": { "columns": 6, "rows": 3 },
+          "settings": [
+            { "id": "refreshSeconds", "title": "Refresh", "type": "number",
+              "min": 30, "max": 600, "step": 10, "default": 60 },
+            { "id": "showMonthly", "title": "Monthly", "type": "toggle", "default": true }
+          ],
+          "entry": "index.html"
+        }
+        """
+        let bundle = try makeBundle(named: "Tuned", manifest: manifestJSON)
+
+        let widget = try WidgetBundleStore.load(bundleAt: bundle)
+        let settings = widget.manifest.settings
+
+        XCTAssertEqual(settings.count, 2)
+        XCTAssertEqual(settings[0].kind, .number(min: 30, max: 600, step: 10))
+        XCTAssertEqual(settings[0].defaultValue, .number(60))
+        XCTAssertEqual(settings[1].kind, .toggle)
+        XCTAssertEqual(settings[1].defaultValue, .bool(true))
+    }
+
+    func testRejectsANumericSettingWithoutRange() throws {
+        let manifestJSON = """
+        {
+          "id": "com.example.broken",
+          "name": "Broken",
+          "version": "1.0.0",
+          "apiVersion": 1,
+          "placement": { "columns": 6, "rows": 3 },
+          "settings": [
+            { "id": "count", "title": "Count", "type": "number", "default": 3 }
+          ],
+          "entry": "index.html"
+        }
+        """
+        let bundle = try makeBundle(named: "Broken", manifest: manifestJSON)
+
+        XCTAssertThrowsError(try WidgetBundleStore.load(bundleAt: bundle))
+    }
 }

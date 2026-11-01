@@ -52,9 +52,28 @@ public struct DiskWidgetManifest: Decodable, Sendable {
         let keychain: KeychainRefDTO
     }
 
+    struct SettingDTO: Decodable, Sendable {
+        struct OptionDTO: Decodable, Sendable {
+            let value: String
+            let title: String
+        }
+
+        let id: String
+        let title: String
+        let description: String?
+        let type: String
+        let `default`: SettingValue
+        let min: Double?
+        let max: Double?
+        let step: Double?
+        let placeholder: String?
+        let options: [OptionDTO]?
+    }
+
     let networkHosts: [String]?
     let keychainServices: [String]?
     let credentials: [CredentialDTO]?
+    let settings: [SettingDTO]?
     let placement: PlacementDTO?
     let refresh: RefreshDTO?
     let entry: String?
@@ -199,6 +218,16 @@ public enum WidgetBundleStore {
             )
         }
 
+        let settings = try (dto.settings ?? []).map { setting in
+            WidgetSetting(
+                id: setting.id,
+                title: setting.title,
+                description: setting.description,
+                kind: try kind(for: setting),
+                defaultValue: setting.default
+            )
+        }
+
         let manifest = WidgetManifest(
             id: dto.id,
             name: dto.name,
@@ -208,6 +237,7 @@ public enum WidgetBundleStore {
             networkHosts: dto.networkHosts ?? [],
             keychainServices: dto.keychainServices ?? [],
             credentials: credentials,
+            settings: settings,
             placement: placement,
             refresh: refresh
         )
@@ -234,6 +264,30 @@ public enum WidgetBundleStore {
             entry: entry,
             defaultEnabled: dto.defaultEnabled ?? false
         )
+    }
+
+    private static func kind(for setting: DiskWidgetManifest.SettingDTO) throws -> WidgetSetting.Kind {
+        switch setting.type {
+        case "toggle":
+            return .toggle
+        case "number":
+            guard let lower = setting.min, let upper = setting.max, upper > lower else {
+                throw DiskWidgetError.unreadableManifest("number setting '\(setting.id)' needs min and max")
+            }
+            return .number(min: lower, max: upper, step: setting.step ?? 1)
+        case "text":
+            return .text(placeholder: setting.placeholder)
+        case "select":
+            let options = (setting.options ?? []).map {
+                WidgetSetting.Option(value: $0.value, title: $0.title)
+            }
+            guard !options.isEmpty else {
+                throw DiskWidgetError.unreadableManifest("select setting '\(setting.id)' needs options")
+            }
+            return .select(options: options)
+        default:
+            throw DiskWidgetError.unreadableManifest("unknown setting type '\(setting.type)'")
+        }
     }
 
     private static func parseVersion(_ raw: String) -> SemanticVersion? {

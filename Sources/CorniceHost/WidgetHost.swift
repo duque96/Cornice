@@ -24,6 +24,7 @@ public struct WidgetCatalogEntry: Identifiable, Sendable {
     public let capabilities: Set<Capability>
     public let source: Source
     public let defaultEnabled: Bool
+    public let settings: [WidgetSetting]
     public var enabled: Bool
 }
 
@@ -54,9 +55,11 @@ public final class WidgetHost {
     private let stageWidth: CGFloat
     private let widgetsDirectory: URL
     private let preferences: WidgetPreferencesStore
+    public let settingsStore: WidgetSettingsStore
     private let log = WidgetLog(subsystem: "host")
 
     private var factories: [WidgetID: any WidgetFactory] = [:]
+    private var manifests: [WidgetID: WidgetManifest] = [:]
     private var isActive = false
     private var ticker: Task<Void, Never>?
 
@@ -65,13 +68,15 @@ public final class WidgetHost {
         secretStore: any SecretAccessing = FileSecretStore(),
         stageWidth: CGFloat = 380,
         widgetsDirectory: URL = WidgetPaths.widgetsDirectory,
-        preferences: WidgetPreferencesStore? = nil
+        preferences: WidgetPreferencesStore? = nil,
+        settingsStore: WidgetSettingsStore? = nil
     ) {
         self.builtInFactories = factories
         self.secretStore = secretStore
         self.stageWidth = stageWidth
         self.widgetsDirectory = widgetsDirectory
         self.preferences = preferences ?? WidgetPreferencesStore()
+        self.settingsStore = settingsStore ?? WidgetSettingsStore()
     }
 
     // MARK: - Discovery
@@ -105,6 +110,7 @@ public final class WidgetHost {
                     capabilities: manifest.capabilities,
                     source: .builtIn,
                     defaultEnabled: true,
+                    settings: manifest.settings,
                     enabled: preferences.isEnabled(manifest.id, builtIn: true)
                 )
             )
@@ -125,6 +131,7 @@ public final class WidgetHost {
                     capabilities: manifest.capabilities,
                     source: .disk,
                     defaultEnabled: bundle.defaultEnabled,
+                    settings: manifest.settings,
                     enabled: preferences.isEnabled(
                         manifest.id,
                         builtIn: false,
@@ -135,6 +142,14 @@ public final class WidgetHost {
         }
 
         self.factories = factories
+        self.manifests = factories.compactMapValues { $0.manifest }
+
+        for entry in entries {
+            if let manifest = self.manifests[entry.id] {
+                settingsStore.prepare(manifest)
+            }
+        }
+
         catalog = entries
 
         for entry in entries where entry.enabled {
@@ -165,6 +180,28 @@ public final class WidgetHost {
 
     public func isEnabled(_ id: WidgetID) -> Bool {
         catalog.first { $0.id == id }?.enabled ?? false
+    }
+
+    // MARK: - Settings
+
+    public func manifest(for id: WidgetID) -> WidgetManifest? {
+        manifests[id]
+    }
+
+    public func settingsValues(for id: WidgetID) -> [String: SettingValue] {
+        guard let manifest = manifests[id] else { return [:] }
+        return settingsStore.values(for: manifest)
+    }
+
+    /// Applies a setting and remounts the widget so it reads the new value.
+    public func setSetting(_ id: WidgetID, key: String, value: SettingValue) {
+        guard let manifest = manifests[id] else { return }
+
+        settingsStore.set(value, for: key, of: manifest)
+
+        guard widgets.contains(where: { $0.id == id }) else { return }
+        unmount(id)
+        mount(id)
     }
 
     // MARK: - Lifecycle
@@ -214,6 +251,7 @@ public final class WidgetHost {
             capabilities: manifest.capabilities,
             secrets: scopedSecrets,
             http: http,
+            settings: WidgetSettings(values: settingsStore.values(for: manifest)),
             log: widgetLog,
             availableWidth: stageWidth
         )

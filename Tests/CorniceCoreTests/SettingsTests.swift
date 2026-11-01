@@ -70,9 +70,9 @@ final class SettingsTests: XCTestCase {
 
     func testRenderSettingsWindow() throws {
         let store = SettingsStore(url: temporaryURL())
-        let view = SettingsForm(store: store)
+        let view = MotionSettingsView(store: store)
             .padding(20)
-            .frame(width: 540)
+            .frame(width: 520)
             .fixedSize(horizontal: false, vertical: true)
             .background(Color(nsColor: .windowBackgroundColor))
 

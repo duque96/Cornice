@@ -48,19 +48,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.openSettings()
         }
 
-        let gallery = AnyView(
-            WidgetGalleryView(host: host) {
-                WidgetBundleStore.ensureDirectoryExists()
-                NSWorkspace.shared.activateFileViewerSelecting([WidgetPaths.widgetsDirectory])
-            }
-        )
-
         settingsWindow = SettingsWindowController(
-            store: settings,
+            sections: { [weak self, weak host] in
+                guard let self else { return [] }
+                return self.makeSections(settings: settings, host: host)
+            },
             onPreview: { [weak controller] pinned in
                 controller?.setPinned(pinned)
-            },
-            widgetsSection: gallery
+            }
         )
 
         if ProcessInfo.processInfo.environment["CORNICE_START_OPEN"] == "1" {
@@ -107,6 +102,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         item.menu = menu
         statusItem = item
+    }
+
+    private func makeSections(settings: SettingsStore, host: WidgetHost?) -> [SettingsSection] {
+        var sections: [SettingsSection] = [
+            SettingsSection(
+                id: "motion",
+                title: "Motion",
+                systemImage: "sparkles",
+                content: AnyView(MotionSettingsView(store: settings))
+            ),
+            SettingsSection(
+                id: "interaction",
+                title: "Interaction",
+                systemImage: "cursorarrow.rays",
+                content: AnyView(InteractionSettingsView(store: settings))
+            ),
+            SettingsSection(
+                id: "panel",
+                title: "Panel",
+                systemImage: "rectangle.topthird.inset.filled",
+                content: AnyView(PanelSettingsView(store: settings))
+            ),
+        ]
+
+        guard let host else { return sections }
+
+        sections.append(
+            SettingsSection(
+                id: "widgets",
+                title: "Widgets",
+                systemImage: "square.grid.2x2",
+                content: AnyView(
+                    WidgetGalleryView(host: host) {
+                        WidgetBundleStore.ensureDirectoryExists()
+                        NSWorkspace.shared.activateFileViewerSelecting([WidgetPaths.widgetsDirectory])
+                    }
+                )
+            )
+        )
+
+        for entry in host.catalog where !entry.settings.isEmpty {
+            sections.append(
+                SettingsSection(
+                    id: "widget.\(entry.id)",
+                    title: entry.name,
+                    systemImage: entry.source == .disk ? "shippingbox" : "hammer",
+                    content: AnyView(WidgetSettingsView(host: host, widgetID: entry.id))
+                )
+            )
+        }
+
+        return sections
     }
 
     @objc private func openSettings() {

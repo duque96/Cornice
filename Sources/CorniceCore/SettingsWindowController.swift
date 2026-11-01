@@ -1,43 +1,41 @@
 import AppKit
 import SwiftUI
 
-/// Hosts the options window. One instance, reused.
+/// Hosts the options window. Sections are rebuilt on every open so newly enabled
+/// widgets get their page without restarting the app.
 @MainActor
 public final class SettingsWindowController: NSObject, NSWindowDelegate {
-    private let store: SettingsStore
+    private let makeSections: () -> [SettingsSection]
     private let onPreview: (Bool) -> Void
-    private let widgetsSection: AnyView?
     private var window: NSWindow?
 
     public init(
-        store: SettingsStore,
-        onPreview: @escaping (Bool) -> Void,
-        widgetsSection: AnyView? = nil
+        sections: @escaping () -> [SettingsSection],
+        onPreview: @escaping (Bool) -> Void
     ) {
-        self.store = store
+        self.makeSections = sections
         self.onPreview = onPreview
-        self.widgetsSection = widgetsSection
         super.init()
     }
 
     public func show() {
-        if window == nil {
+        let content = NSHostingView(
+            rootView: SettingsShellView(sections: makeSections(), onPreview: onPreview)
+        )
+
+        if let window {
+            window.contentView = content
+        } else {
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 540, height: 660),
-                styleMask: [.titled, .closable, .miniaturizable],
+                contentRect: NSRect(x: 0, y: 0, width: 720, height: 620),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
                 defer: false
             )
             window.title = "Cornice Settings"
             window.isReleasedWhenClosed = false
             window.delegate = self
-            window.contentView = NSHostingView(
-                rootView: SettingsView(
-                    store: store,
-                    onPreview: onPreview,
-                    widgetsSection: widgetsSection
-                )
-            )
+            window.contentView = content
             window.center()
             self.window = window
         }

@@ -115,6 +115,8 @@ public struct WidgetManifest: Sendable, Equatable {
     public let keychainServices: [String]
     /// Secrets the host may attach to outgoing requests on the widget's behalf.
     public let credentials: [CredentialRule]
+    /// Fields the widget wants rendered in Options.
+    public let settings: [WidgetSetting]
     public let placement: Placement
     public let refresh: RefreshPolicy
 
@@ -127,6 +129,7 @@ public struct WidgetManifest: Sendable, Equatable {
         networkHosts: [String] = [],
         keychainServices: [String] = [],
         credentials: [CredentialRule] = [],
+        settings: [WidgetSetting] = [],
         placement: Placement,
         refresh: RefreshPolicy = .manual
     ) {
@@ -138,6 +141,7 @@ public struct WidgetManifest: Sendable, Equatable {
         self.networkHosts = networkHosts
         self.keychainServices = keychainServices
         self.credentials = credentials
+        self.settings = settings
         self.placement = placement
         self.refresh = refresh
     }
@@ -159,6 +163,13 @@ public struct WidgetManifest: Sendable, Equatable {
         }
         if capabilities.contains(.keychain) && keychainServices.isEmpty {
             problems.append("keychain capability requires keychainServices")
+        }
+        let settingIDs = settings.map(\.id)
+        if Set(settingIDs).count != settingIDs.count {
+            problems.append("setting ids must be unique")
+        }
+        for setting in settings where setting.id.isEmpty || setting.title.isEmpty {
+            problems.append("settings need an id and a title")
         }
         for credential in credentials {
             if credential.header.isEmpty {

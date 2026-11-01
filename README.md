@@ -8,9 +8,9 @@ A modular host for the MacBook notch. The notch becomes a surface for widgets, a
 
 ## Status
 
-**M5 — the Example widget is a disk widget.** Nothing about it is compiled in anymore: it
-ships as a bundled `.cornicewidget` (HTML/JS), authenticates through host-injected
-credentials and is installed into Application Support on first run.
+**M6 — a real settings window.** Options is a sidebar of sections, and every widget can
+inject its own page with declarative settings. The Example widget already does: refresh
+interval and monthly visibility.
 
 | Milestone | Content | Done |
 |---|---|---|
@@ -20,7 +20,8 @@ credentials and is installed into Application Support on first run.
 | M3 | First widget: Example Widget usage (native) | ✅ |
 | M4 | Widgets from disk (HTML/JS in a sandbox) + gallery | ✅ |
 | M5 | Example Widget ported to a bundled disk widget + credential injection | ✅ |
-| M6 | Layout solver with pages, native bundles with signatures | — |
+| M6 | Sidebar options window + declarative widget settings | ✅ |
+| M7 | Layout solver with pages, native bundles with signatures | — |
 
 ## The Example Widget widget
 
@@ -119,13 +120,42 @@ Hover the notch to expand. The status bar icon toggles the surface, opens **Opti
 
 ## Options
 
-Everything the surface uses is editable and applied live from **Options…**: open/close
-spring (response + bounce), content fade delay and duration, hover open/close delays, and
-panel width/height. `Show notch` pins the surface open so changes can be previewed while
-you drag the sliders.
+A sidebar, one page per section, applied live:
 
-Settings persist to `~/Library/Application Support/Cornice/settings.json` (atomic writes,
-schema version, values clamped on load).
+| Section | What it holds |
+|---|---|
+| **Motion** | open/close spring (response + bounce), content fade delay and duration |
+| **Interaction** | hover open/close delays |
+| **Panel** | width, height, restore defaults |
+| **Widgets** | gallery: enable/disable, source, capabilities, open folder, reload |
+| **<widget name>** | one page per widget that declares settings |
+
+`Show notch` pins the surface open so changes can be previewed while you drag sliders.
+Sections are rebuilt every time the window opens, so a widget you just enabled gets its
+page without restarting.
+
+Host settings persist to `~/Library/Application Support/Cornice/settings.json` (atomic,
+schema version, values clamped on load). Widget settings live in
+`~/Library/Application Support/Cornice/widget-settings/<id>/settings.json`.
+
+### Widget settings
+
+A widget declares its fields in the manifest and the host renders the form:
+
+```json
+"settings": [
+  { "id": "refreshSeconds", "title": "Refresh every", "type": "number",
+    "min": 30, "max": 600, "step": 10, "default": 60,
+    "description": "Seconds between requests while the panel is open." },
+  { "id": "showMonthly", "title": "Show monthly window", "type": "toggle",
+    "default": true }
+]
+```
+
+Types: `toggle`, `number` (requires `min`/`max`), `text`, `select` (requires `options`).
+Values are validated and clamped on load. Changing one remounts the widget, so a web
+widget reloads with `window.cornice.settings` already populated; native widgets get them in
+`WidgetContext.settings`.
 
 | Variable | Effect |
 |---|---|
@@ -147,10 +177,10 @@ CORNICE_SNAPSHOT_DIR=/tmp/cornice swift test
 
 ```
 Sources/
-  CorniceCore/      # notch geometry, panel, animation, input
-  CorniceKit/       # public SDK: manifests, capabilities, CorniceWidget
-  CorniceHost/      # mounting, clock, capabilities, disk loader, web sandbox
-  CorniceApp/       # @main, composition root
+  CorniceCore/      # notch geometry, panel, animation, input, settings shell
+  CorniceKit/       # public SDK: manifests, capabilities, settings, CorniceWidget
+  CorniceHost/      # mounting, clock, capabilities, disk loader, web sandbox, settings UI
+  CorniceApp/       # @main, composition root, sidebar sections
 BundledWidgets/
   ExampleWidget.cornicewidget/   # ships with the app
 Examples/
