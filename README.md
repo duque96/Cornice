@@ -24,7 +24,8 @@ LAN: CPU, RAM, disk, guests, temperature and WiFi, all in a 3×3 card.
 | M8 | Drag to reorder widgets | ✅ |
 | M9 | Drag to resize widgets on the grid | ✅ |
 | M10 | Status widget (LAN dashboard) | ✅ |
-| M11 | Native bundles with signatures | — |
+| M11 | English and Spanish, down to the SDK | ✅ |
+| M12 | Native bundles with signatures | — |
 
 ## The Example Widget widget
 
@@ -138,6 +139,20 @@ It is the first widget that needed local networking, so the app declares:
 
 Outside the house it keeps working through the tailnet (the `dns` node is the subnet
 router); if neither is reachable it says so instead of spinning.
+
+## Localization
+
+*Options → General → Language* offers **System / English / Español**. It applies live to the
+window, the status menu and every widget.
+
+- Native widgets read `WidgetContext.language` (`WidgetLanguage.en` / `.es`).
+- Web widgets get `window.cornice.language` (`"en"` / `"es"`) and
+  `window.cornice.locale` (`en_GB` / `es_ES`), and the bundled ones ship both dictionaries.
+- Add-ons only need to switch on that value; the host resolves "system" from the Mac's
+  preferred language once.
+
+The app UI uses a small inline translator, `Translator(language)("English", "Español")`,
+so a language change re-renders immediately with no relaunch and no resource bundles.
 
 ## Capabilities
 

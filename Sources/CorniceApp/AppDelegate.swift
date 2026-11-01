@@ -10,6 +10,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var widgetHost: WidgetHost?
     private var settingsStore: SettingsStore?
     private var statusItem: NSStatusItem?
+    private var statusMenuLanguage: AppLanguage?
+    private var currentLanguage: AppLanguage?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -21,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let settings = SettingsStore()
         settingsStore = settings
+        currentLanguage = settings.settings.language
         let pager = StagePager()
         let controller = NotchSurfaceController(
             settings: settings,
@@ -39,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let host = WidgetHost(factories: [])
+        host.language = settings.settings.language
         widgetHost = host
 
         controller.widgetContent = AnyView(WidgetAreaView(host: host, pager: pager))
@@ -57,6 +61,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         settings.onChange = { [weak self, weak controller] in
             controller?.applySettings()
+            if let language = self?.settingsStore?.settings.language {
+                self?.widgetHost?.language = language
+                if self?.currentLanguage != language {
+                    self?.currentLanguage = language
+                    self?.settingsWindow?.refresh()
+                }
+            }
             self?.syncStatusItem()
         }
 
@@ -65,6 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         settingsWindow = SettingsWindowController(
+            store: settings,
             sections: { [weak self, weak host] in
                 guard let self else { return [] }
                 return self.makeSections(settings: settings, host: host)
@@ -92,13 +104,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func syncStatusItem() {
         let shouldShow = settingsStore?.settings.showMenuBarIcon ?? true
+        let language = settingsStore?.settings.language ?? .system
         debugLog("menu bar icon: \(shouldShow ? "shown" : "hidden")")
 
-        if shouldShow, statusItem == nil {
-            installStatusItem()
-        } else if !shouldShow, let statusItem {
+        if shouldShow {
+            if statusItem == nil {
+                installStatusItem()
+            }
+            if statusMenuLanguage != language, let statusItem {
+                statusItem.menu = makeMenu()
+                statusMenuLanguage = language
+            }
+        } else if let statusItem {
             NSStatusBar.system.removeStatusItem(statusItem)
             self.statusItem = nil
+            statusMenuLanguage = nil
         }
     }
 
@@ -118,31 +138,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        item.menu = makeMenu()
+        statusMenuLanguage = settingsStore?.settings.language ?? .system
+        statusItem = item
+    }
+
+    private func makeMenu() -> NSMenu {
+        let t = Translator(settingsStore?.settings.language ?? .system)
         let menu = NSMenu()
 
-        let toggle = NSMenuItem(title: "Toggle notch", action: #selector(toggleSurface), keyEquivalent: "t")
+        let toggle = NSMenuItem(
+            title: t("Toggle notch", "Mostrar/ocultar notch"),
+            action: #selector(toggleSurface),
+            keyEquivalent: "t"
+        )
         toggle.target = self
         menu.addItem(toggle)
 
-        let options = NSMenuItem(title: "Options…", action: #selector(openSettings), keyEquivalent: ",")
+        let options = NSMenuItem(
+            title: t("Options…", "Opciones…"),
+            action: #selector(openSettings),
+            keyEquivalent: ","
+        )
         options.target = self
         menu.addItem(options)
 
         menu.addItem(.separator())
 
-        let quit = NSMenuItem(title: "Quit Cornice", action: #selector(quit), keyEquivalent: "q")
+        let quit = NSMenuItem(
+            title: t("Quit Cornice", "Salir de Cornice"),
+            action: #selector(quit),
+            keyEquivalent: "q"
+        )
         quit.target = self
         menu.addItem(quit)
 
-        item.menu = menu
-        statusItem = item
+        return menu
     }
 
     private func makeSections(settings: SettingsStore, host: WidgetHost?) -> [SettingsSection] {
+        let t = Translator(settings.settings.language)
+
         var sections: [SettingsSection] = [
             SettingsSection(
                 id: "general",
-                title: "General",
+                title: t("General", "General"),
                 systemImage: "gearshape",
                 content: AnyView(
                     GeneralSettingsView(store: settings) {
@@ -152,19 +192,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ),
             SettingsSection(
                 id: "motion",
-                title: "Motion",
+                title: t("Motion", "Movimiento"),
                 systemImage: "sparkles",
                 content: AnyView(MotionSettingsView(store: settings))
             ),
             SettingsSection(
                 id: "interaction",
-                title: "Interaction",
+                title: t("Interaction", "Interacción"),
                 systemImage: "cursorarrow.rays",
                 content: AnyView(InteractionSettingsView(store: settings))
             ),
             SettingsSection(
                 id: "panel",
-                title: "Panel",
+                title: t("Panel", "Panel"),
                 systemImage: "rectangle.topthird.inset.filled",
                 content: AnyView(PanelSettingsView(store: settings))
             ),
@@ -175,7 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sections.append(
             SettingsSection(
                 id: "layout",
-                title: "Layout",
+                title: t("Layout", "Disposición"),
                 systemImage: "rectangle.3.group",
                 content: AnyView(LayoutEditorView(host: host))
             )
@@ -184,7 +224,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sections.append(
             SettingsSection(
                 id: "widgets",
-                title: "Widgets",
+                title: t("Widgets", "Widgets"),
                 systemImage: "square.grid.2x2",
                 content: AnyView(
                     WidgetGalleryView(host: host) {

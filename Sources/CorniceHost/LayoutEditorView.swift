@@ -18,11 +18,13 @@ public struct LayoutEditorView: View {
     }
 
     public var body: some View {
+        let t = Translator(host.language)
+
         VStack(alignment: .leading, spacing: 18) {
             header
 
             if host.catalog.isEmpty {
-                Text("Enable a widget first.")
+                Text(t("Enable a widget first.", "Activa un widget primero."))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             } else {
@@ -30,11 +32,14 @@ public struct LayoutEditorView: View {
             }
 
             HStack {
-                Text("Drag the corner handle. Sizes snap to columns and rows.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+                Text(t(
+                    "Drag the corner handle. Sizes snap to columns and rows.",
+                    "Arrastra la esquina. El tamaño se ajusta a columnas y filas."
+                ))
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
                 Spacer()
-                Button("Reset sizes") {
+                Button(t("Reset sizes", "Restablecer tamaños")) {
                     host.resetSizes()
                 }
                 .controlSize(.small)
@@ -43,10 +48,15 @@ public struct LayoutEditorView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Layout")
+        let t = Translator(host.language)
+
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(t("Layout", "Disposición"))
                 .font(.system(size: 17, weight: .semibold))
-            Text("Six columns, 30 pt rows. Widgets scroll into pages when they do not fit.")
+            Text(t(
+                "Six columns, 30 pt rows. Widgets page when they do not fit.",
+                "Seis columnas, filas de 30 pt. Los widgets pasan a otra página si no caben."
+            ))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         }
@@ -135,6 +145,6 @@ private struct ResizeHandle: View {
                         startSize = nil
                     }
             )
-            .help("Drag to resize")
+            .help(Translator(host.language)("Drag to resize", "Arrastra para redimensionar"))
     }
 }

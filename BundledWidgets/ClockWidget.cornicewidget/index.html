@@ -51,19 +51,21 @@
   </div>
 
   <script>
+    const LOCALE = (window.cornice && cornice.language) === 'es' ? 'es-ES' : 'en-GB';
+
     function render(timestamp) {
       const now = timestamp ? new Date(timestamp) : new Date();
-      document.getElementById('time').textContent = now.toLocaleTimeString([], {
+      document.getElementById('time').textContent = now.toLocaleTimeString(LOCALE, {
         hour: '2-digit',
         minute: '2-digit'
       });
-      document.getElementById('day').textContent = now.toLocaleDateString([], {
+      document.getElementById('day').textContent = now.toLocaleDateString(LOCALE, {
         weekday: 'short',
         day: 'numeric',
         month: 'short'
       });
       document.getElementById('zone').textContent =
-        Intl.DateTimeFormat().resolvedOptions().timeZone;
+        LOCALE === 'es-ES' ? 'Europa/Madrid' : Intl.DateTimeFormat().resolvedOptions().timeZone;
     }
 
     cornice.onTick(render);

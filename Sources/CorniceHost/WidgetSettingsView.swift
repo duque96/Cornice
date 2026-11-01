@@ -1,4 +1,5 @@
 import SwiftUI
+import CorniceCore
 import CorniceKit
 
 /// Options page for a single widget, generated from its manifest.
@@ -12,12 +13,14 @@ public struct WidgetSettingsView: View {
     }
 
     public var body: some View {
+        let t = Translator(host.language)
+
         if let manifest = host.manifest(for: widgetID) {
             VStack(alignment: .leading, spacing: 20) {
                 header(manifest)
 
                 if manifest.settings.isEmpty {
-                    Text("This widget has no options.")
+                    Text(t("This widget has no options.", "Este widget no tiene opciones."))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 } else {
@@ -43,14 +46,16 @@ public struct WidgetSettingsView: View {
                 }
             }
         } else {
-            Text("Widget not found")
+            Text(t("Widget not found", "Widget no encontrado"))
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
         }
     }
 
     private func header(_ manifest: WidgetManifest) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let t = Translator(host.language)
+
+        return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 Text(manifest.name)
                     .font(.system(size: 17, weight: .semibold))
@@ -58,7 +63,10 @@ public struct WidgetSettingsView: View {
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
-            Text("Changes are saved to Application Support and reload the widget.")
+            Text(t(
+                "Changes are saved to Application Support and reload the widget.",
+                "Los cambios se guardan y el widget se recarga."
+            ))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         }

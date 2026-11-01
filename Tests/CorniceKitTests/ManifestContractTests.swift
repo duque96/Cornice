@@ -88,6 +88,12 @@ final class ManifestContractTests: XCTestCase {
         XCTAssertFalse(manifest.problems.isEmpty)
     }
 
+    func testWidgetLanguagesCarryALocale() {
+        XCTAssertEqual(WidgetLanguage.en.localeIdentifier, "en_GB")
+        XCTAssertEqual(WidgetLanguage.es.localeIdentifier, "es_ES")
+        XCTAssertEqual(WidgetLanguage(rawValue: "es"), .es)
+    }
+
     func testHTTPResponseKnowsSuccess() {
         XCTAssertTrue(HTTPResponse(status: 200, body: Data()).isSuccess)
         XCTAssertTrue(HTTPResponse(status: 204, body: Data()).isSuccess)

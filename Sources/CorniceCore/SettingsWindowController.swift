@@ -5,23 +5,45 @@ import SwiftUI
 /// widgets get their page without restarting the app.
 @MainActor
 public final class SettingsWindowController: NSObject, NSWindowDelegate {
+    private let store: SettingsStore
     private let makeSections: () -> [SettingsSection]
     private let onPreview: (Bool) -> Void
     private var window: NSWindow?
 
     public init(
+        store: SettingsStore,
         sections: @escaping () -> [SettingsSection],
         onPreview: @escaping (Bool) -> Void
     ) {
+        self.store = store
         self.makeSections = sections
         self.onPreview = onPreview
         super.init()
     }
 
-    public func show() {
-        let content = NSHostingView(
-            rootView: SettingsShellView(sections: makeSections(), onPreview: onPreview)
+    private var title: String {
+        Translator(store.settings.language)("Cornice Settings", "Ajustes de Cornice")
+    }
+
+    private func content() -> NSView {
+        NSHostingView(
+            rootView: SettingsShellView(
+                sections: makeSections(),
+                store: store,
+                onPreview: onPreview
+            )
         )
+    }
+
+    /// Rebuilds an open window (used when the language changes).
+    public func refresh() {
+        guard let window, window.isVisible else { return }
+        window.title = title
+        window.contentView = content()
+    }
+
+    public func show() {
+        let content = content()
 
         if let window {
             window.contentView = content
@@ -32,7 +54,7 @@ public final class SettingsWindowController: NSObject, NSWindowDelegate {
                 backing: .buffered,
                 defer: false
             )
-            window.title = "Cornice Settings"
+            window.title = title
             window.isReleasedWhenClosed = false
             window.delegate = self
             window.contentView = content

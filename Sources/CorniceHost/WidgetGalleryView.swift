@@ -1,4 +1,5 @@
 import SwiftUI
+import CorniceCore
 import CorniceKit
 
 /// The widget list shown inside Options.
@@ -14,6 +15,8 @@ public struct WidgetGalleryView: View {
     }
 
     public var body: some View {
+        let t = Translator(host.language)
+
         VStack(alignment: .leading, spacing: 10) {
             ForEach(host.catalog) { entry in
                 row(entry)
@@ -27,10 +30,13 @@ public struct WidgetGalleryView: View {
             }
 
             HStack(spacing: 8) {
-                Button("Open widgets folder", action: onRevealFolder)
-                Button("Reload") { host.reload() }
+                Button(t("Open widgets folder", "Abrir carpeta de widgets"), action: onRevealFolder)
+                Button(t("Reload", "Recargar")) { host.reload() }
                 Spacer()
-                Text("Drag rows to reorder · drop bundles in the folder")
+                Text(t(
+                    "Drag rows to reorder · drop bundles in the folder",
+                    "Arrastra para reordenar · suelta bundles en la carpeta"
+                ))
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
             }
@@ -39,7 +45,9 @@ public struct WidgetGalleryView: View {
     }
 
     private func row(_ entry: WidgetCatalogEntry) -> some View {
-        HStack(alignment: .center, spacing: 10) {
+        let t = Translator(host.language)
+
+        return HStack(alignment: .center, spacing: 10) {
             Image(systemName: "line.3.horizontal")
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.tertiary)
@@ -52,7 +60,7 @@ public struct WidgetGalleryView: View {
                     Text(entry.version.description)
                         .font(.system(size: 9, design: .monospaced))
                         .foregroundStyle(.secondary)
-                    Text(entry.source == .disk ? "disk" : "built-in")
+                    Text(entry.source == .disk ? t("disk", "disco") : t("built-in", "incluido"))
                         .font(.system(size: 8, weight: .semibold))
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
@@ -63,7 +71,7 @@ public struct WidgetGalleryView: View {
                 Text(
                     "\(entry.size.columns)×\(entry.size.rows) · " +
                         (entry.capabilities.isEmpty
-                            ? "no capabilities"
+                            ? t("no capabilities", "sin capacidades")
                             : entry.capabilities.map(\.rawValue).sorted().joined(separator: " · "))
                 )
                 .font(.system(size: 9))

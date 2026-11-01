@@ -49,12 +49,14 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
     private let bundle: DiskWidget
     private let http: (any HTTPClient)?
     private let settings: WidgetSettings
+    private let language: WidgetLanguage
     private let log: WidgetLog
 
     init(bundle: DiskWidget, context: WidgetContext) {
         self.bundle = bundle
         self.http = context.http
         self.settings = context.settings
+        self.language = context.language
         self.log = context.log
 
         let configuration = WKWebViewConfiguration()
@@ -77,7 +79,7 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         )
         controller.addUserScript(
             WKUserScript(
-                source: Self.settingsScript(context.settings),
+                source: Self.settingsScript(context.settings, context.language),
                 injectionTime: .atDocumentStart,
                 forMainFrameOnly: true
             )
@@ -241,11 +243,16 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
     })();
     """
 
-    private static func settingsScript(_ settings: WidgetSettings) -> String {
+    private static func settingsScript(_ settings: WidgetSettings, _ language: WidgetLanguage) -> String {
         let payload = settings.values.mapValues(\.jsonObject)
         let data = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data("{}".utf8)
         let json = String(data: data, encoding: .utf8) ?? "{}"
-        return "window.cornice = window.cornice || {}; window.cornice.settings = \(json);"
+        return """
+        window.cornice = window.cornice || {};
+        window.cornice.settings = \(json);
+        window.cornice.language = "\(language.rawValue)";
+        window.cornice.locale = "\(language.localeIdentifier)";
+        """
     }
 
     private static let styleScript = """

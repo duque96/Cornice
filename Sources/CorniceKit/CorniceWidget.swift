@@ -28,6 +28,8 @@ public struct WidgetContext {
     public let http: (any HTTPClient)?
     /// Resolved settings (defaults merged with what the user saved).
     public let settings: WidgetSettings
+    /// Language the host is running in.
+    public let language: WidgetLanguage
     public let log: WidgetLog
     /// Panel width the host is giving the stage, so widgets can size themselves.
     public let availableWidth: CGFloat
@@ -37,6 +39,7 @@ public struct WidgetContext {
         secrets: (any SecretAccessing)?,
         http: (any HTTPClient)?,
         settings: WidgetSettings,
+        language: WidgetLanguage,
         log: WidgetLog,
         availableWidth: CGFloat
     ) {
@@ -44,6 +47,7 @@ public struct WidgetContext {
         self.secrets = secrets
         self.http = http
         self.settings = settings
+        self.language = language
         self.log = log
         self.availableWidth = availableWidth
     }

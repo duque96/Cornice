@@ -2,6 +2,41 @@ import Foundation
 import Observation
 
 /// Everything the user can tune, persisted as JSON.
+/// Language preference. `.system` follows the macOS preferred language.
+public enum AppLanguage: String, Codable, Sendable, CaseIterable, Identifiable {
+    case system
+    case en
+    case es
+
+    public var id: String { rawValue }
+
+    public static var systemDefault: AppLanguage {
+        let preferred = Locale.preferredLanguages.first ?? "en"
+        return preferred.hasPrefix("es") ? .es : .en
+    }
+
+    public var resolved: AppLanguage {
+        self == .system ? Self.systemDefault : self
+    }
+
+    public var code: String {
+        resolved == .es ? "es" : "en"
+    }
+}
+
+/// Tiny inline translator: `t("Motion", "Movimiento")`.
+public struct Translator: Sendable {
+    public let language: AppLanguage
+
+    public init(_ language: AppLanguage) {
+        self.language = language
+    }
+
+    public func callAsFunction(_ english: String, _ spanish: String) -> String {
+        language.resolved == .es ? spanish : english
+    }
+}
+
 public struct CorniceSettings: Codable, Sendable, Equatable {
     public var motion: NotchMotion
     /// Seconds the pointer must rest in the hot zone before opening.
@@ -14,6 +49,7 @@ public struct CorniceSettings: Codable, Sendable, Equatable {
     public var fitToContent: Bool
     /// When off, the app lives only in the notch.
     public var showMenuBarIcon: Bool
+    public var language: AppLanguage
 
     public init(
         motion: NotchMotion = NotchMotion(),
@@ -22,7 +58,8 @@ public struct CorniceSettings: Codable, Sendable, Equatable {
         expandedWidth: Double = 420,
         expandedHeight: Double = 170,
         fitToContent: Bool = true,
-        showMenuBarIcon: Bool = true
+        showMenuBarIcon: Bool = true,
+        language: AppLanguage = .system
     ) {
         self.motion = motion
         self.hoverOpenDelay = hoverOpenDelay
@@ -31,6 +68,7 @@ public struct CorniceSettings: Codable, Sendable, Equatable {
         self.expandedHeight = expandedHeight
         self.fitToContent = fitToContent
         self.showMenuBarIcon = showMenuBarIcon
+        self.language = language
     }
 
     public static let standard = CorniceSettings()
@@ -44,6 +82,7 @@ public struct CorniceSettings: Codable, Sendable, Equatable {
         expandedHeight = try container.decode(Double.self, forKey: .expandedHeight)
         fitToContent = try container.decodeIfPresent(Bool.self, forKey: .fitToContent) ?? true
         showMenuBarIcon = try container.decodeIfPresent(Bool.self, forKey: .showMenuBarIcon) ?? true
+        language = try container.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .system
     }
 
     public var expandedSize: CGSize {

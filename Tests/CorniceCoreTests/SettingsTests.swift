@@ -9,6 +9,26 @@ final class SettingsTests: XCTestCase {
             .appendingPathComponent("cornice-settings-\(UUID().uuidString).json")
     }
 
+    func testTranslatorFollowsTheLanguage() {
+        XCTAssertEqual(Translator(.en)("Motion", "Movimiento"), "Motion")
+        XCTAssertEqual(Translator(.es)("Motion", "Movimiento"), "Movimiento")
+        XCTAssertEqual(
+            Translator(.system)("Motion", "Movimiento"),
+            AppLanguage.systemDefault == .es ? "Movimiento" : "Motion"
+        )
+    }
+
+    func testLanguageIsPersisted() throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = SettingsStore(url: url)
+        store.set(\.language, .es)
+        store.saveNow()
+
+        XCTAssertEqual(SettingsStore(url: url).settings.language, .es)
+    }
+
     func testFitToContentIsOnByDefault() {
         XCTAssertTrue(CorniceSettings.standard.fitToContent)
     }

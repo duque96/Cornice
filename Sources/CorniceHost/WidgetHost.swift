@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import SwiftUI
+import CorniceCore
 import CorniceKit
 
 public struct MountedWidget: Identifiable {
@@ -52,6 +53,8 @@ public final class WidgetHost {
     public private(set) var discoveryErrors: [String] = []
     /// Called when the amount of content changes (mount, resize, reorder).
     public var onLayoutChange: (() -> Void)?
+    /// Language used by widget UIs. Set by the app from the settings store.
+    public var language: AppLanguage = .system
 
     private let builtInFactories: [any WidgetFactory]
     private let secretStore: any SecretAccessing
@@ -333,6 +336,7 @@ public final class WidgetHost {
             secrets: scopedSecrets,
             http: http,
             settings: WidgetSettings(values: settingsStore.values(for: manifest)),
+            language: WidgetLanguage(rawValue: language.resolved.rawValue) ?? .en,
             log: widgetLog,
             availableWidth: stageWidth
         )

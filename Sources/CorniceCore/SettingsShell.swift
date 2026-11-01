@@ -18,13 +18,19 @@ public struct SettingsSection: Identifiable {
 /// VS Code style Options window: sections on the left, one page on the right.
 public struct SettingsShellView: View {
     private let sections: [SettingsSection]
+    private let store: SettingsStore
     private let onPreview: (Bool) -> Void
 
     @State private var selection: String?
     @State private var pinned = false
 
-    public init(sections: [SettingsSection], onPreview: @escaping (Bool) -> Void) {
+    public init(
+        sections: [SettingsSection],
+        store: SettingsStore,
+        onPreview: @escaping (Bool) -> Void
+    ) {
         self.sections = sections
+        self.store = store
         self.onPreview = onPreview
     }
 
@@ -54,13 +60,20 @@ public struct SettingsShellView: View {
             Divider()
 
             HStack(spacing: 10) {
-                Text("Changes apply immediately.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+                Text(Translator(store.settings.language)(
+                    "Changes apply immediately.",
+                    "Los cambios se aplican al instante."
+                ))
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
 
                 Spacer()
 
-                Button(pinned ? "Hide notch" : "Show notch") {
+                Button(
+                    pinned
+                        ? Translator(store.settings.language)("Hide notch", "Ocultar notch")
+                        : Translator(store.settings.language)("Show notch", "Mostrar notch")
+                ) {
                     pinned.toggle()
                     onPreview(pinned)
                 }

@@ -2,6 +2,19 @@ import Foundation
 
 public typealias WidgetID = String
 
+/// Language the host resolved for this session. Widgets localize themselves.
+public enum WidgetLanguage: String, Codable, Sendable, CaseIterable {
+    case en
+    case es
+
+    public var localeIdentifier: String {
+        switch self {
+        case .en: return "en_GB"
+        case .es: return "es_ES"
+        }
+    }
+}
+
 // MARK: - Version
 
 public struct SemanticVersion: Codable, Sendable, Equatable, Comparable, CustomStringConvertible {
