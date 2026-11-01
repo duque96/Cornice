@@ -62,6 +62,7 @@ public final class WidgetHost {
     private let stageWidth: CGFloat
     private let widgetsDirectory: URL
     private let preferences: WidgetPreferencesStore
+    private let tailscale: any TailscaleControlling
     public let settingsStore: WidgetSettingsStore
     private let log = WidgetLog(subsystem: "host")
 
@@ -76,7 +77,8 @@ public final class WidgetHost {
         stageWidth: CGFloat = 380,
         widgetsDirectory: URL = WidgetPaths.widgetsDirectory,
         preferences: WidgetPreferencesStore? = nil,
-        settingsStore: WidgetSettingsStore? = nil
+        settingsStore: WidgetSettingsStore? = nil,
+        tailscale: any TailscaleControlling = SystemTailscale()
     ) {
         self.builtInFactories = factories
         self.secretStore = secretStore
@@ -84,6 +86,7 @@ public final class WidgetHost {
         self.widgetsDirectory = widgetsDirectory
         self.preferences = preferences ?? WidgetPreferencesStore()
         self.settingsStore = settingsStore ?? WidgetSettingsStore()
+        self.tailscale = tailscale
     }
 
     // MARK: - Discovery
@@ -351,6 +354,7 @@ public final class WidgetHost {
             http: http,
             settings: WidgetSettings(values: settingsStore.values(for: manifest)),
             language: WidgetLanguage(rawValue: language.resolved.rawValue) ?? .en,
+            tailscale: manifest.capabilities.contains(.tailscale) ? tailscale : nil,
             log: widgetLog,
             availableWidth: stageWidth
         )
@@ -370,7 +374,7 @@ public final class WidgetHost {
             widget.activate()
         }
 
-        log.warn("mounted \(manifest.id) \(manifest.version)")
+        log.warn("mounted \(manifest.id) \(manifest.version) size \(size(for: manifest.id))")
     }
 
     private func unmount(_ id: WidgetID) {

@@ -46,6 +46,9 @@ public enum Capability: String, Codable, Sendable, CaseIterable {
     case calendar
     case media
     case notifications
+    /// Connect and disconnect Tailscale. Privileged: grants command execution
+    /// through the host, scoped to the `tailscale` CLI.
+    case tailscale
 }
 
 // MARK: - Layout

@@ -5,6 +5,55 @@ public protocol SecretAccessing: Sendable {
     func secret(service: String, account: String) -> String?
 }
 
+// MARK: - Tailscale
+
+public struct TailscaleStatus: Codable, Sendable, Equatable {
+    /// BackendState as reported by the CLI: Running, Stopped, NeedsLogin, Starting…
+    public let backendState: String
+    public let hostname: String?
+    public let ip: String?
+    public let peersOnline: Int
+    public let peersTotal: Int
+    public let version: String?
+
+    public init(
+        backendState: String,
+        hostname: String? = nil,
+        ip: String? = nil,
+        peersOnline: Int = 0,
+        peersTotal: Int = 0,
+        version: String? = nil
+    ) {
+        self.backendState = backendState
+        self.hostname = hostname
+        self.ip = ip
+        self.peersOnline = peersOnline
+        self.peersTotal = peersTotal
+        self.version = version
+    }
+
+    public var isConnected: Bool { backendState == "Running" }
+}
+
+public enum TailscaleError: LocalizedError, Sendable, Equatable {
+    case unavailable
+    case timedOut
+    case commandFailed(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .unavailable: return "Tailscale CLI not found"
+        case .timedOut: return "Tailscale did not answer in time"
+        case .commandFailed(let message): return message
+        }
+    }
+}
+
+public protocol TailscaleControlling: Sendable {
+    func status() async -> TailscaleStatus?
+    func setEnabled(_ enabled: Bool) async -> Result<Void, TailscaleError>
+}
+
 public struct WidgetLog: Sendable {
     public let subsystem: String
 
@@ -30,6 +79,8 @@ public struct WidgetContext {
     public let settings: WidgetSettings
     /// Language the host is running in.
     public let language: WidgetLanguage
+    /// `nil` when the widget did not declare `.tailscale`.
+    public let tailscale: (any TailscaleControlling)?
     public let log: WidgetLog
     /// Panel width the host is giving the stage, so widgets can size themselves.
     public let availableWidth: CGFloat
@@ -40,6 +91,7 @@ public struct WidgetContext {
         http: (any HTTPClient)?,
         settings: WidgetSettings,
         language: WidgetLanguage,
+        tailscale: (any TailscaleControlling)?,
         log: WidgetLog,
         availableWidth: CGFloat
     ) {
@@ -48,6 +100,7 @@ public struct WidgetContext {
         self.http = http
         self.settings = settings
         self.language = language
+        self.tailscale = tailscale
         self.log = log
         self.availableWidth = availableWidth
     }

@@ -157,6 +157,16 @@ window, the status menu and every widget.
 The app UI uses a small inline translator, `Translator(language)("English", "Español")`,
 so a language change re-renders immediately with no relaunch and no resource bundles.
 
+### Tailscale
+
+`BundledWidgets/Tailscale.cornicewidget` is a full-width row (`6×2`): a switch on the right,
+state, tailnet IP and peers on the left. It polls `tailscale status --json` every 5 s and
+calls `tailscale up` / `down` when you flip the switch.
+
+It is the first widget with the **`.tailscale`** capability: the host exposes only
+`status`, `up` and `down` through the CLI, never a shell. The widget cannot run anything
+else.
+
 ## Capabilities
 
 A widget declares what it needs in its manifest; the host decides what it actually gets.

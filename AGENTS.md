@@ -201,14 +201,17 @@ WidgetManifest(id:name:version:apiVersion:capabilities:networkHosts:keychainServ
 ```
 
 - `apiVersion` debe ser `1`; el host rechaza manifests con `problems`.
-- `Capability`: `.network`, `.keychain`, `.files`, `.calendar`, `.media`, `.notifications`.
-  **Solo se aplican network y keychain.**
+- `Capability`: `.network`, `.keychain`, `.files`, `.calendar`, `.media`, `.notifications`,
+  `.tailscale`. **Solo se aplican network, keychain y tailscale.**
 - `.network` exige `networkHosts` (hosts o IPs; acepta subdominios).
 - `.keychain` exige `keychainServices`; el host entrega `ScopedSecrets`.
 - `credentials`: el host inyecta el header (p. ej. `Authorization: Bearer …`) por host.
   El secreto **nunca** llega al widget.
 - `settings`: campos declarativos (`toggle`, `number` con min/max, `text`, `select`).
   El host renderiza el formulario, valida/clampa y remonta el widget al cambiar.
+- `.tailscale`: `WidgetContext.tailscale` + `cornice.tailscale.status()` /
+  `cornice.tailscale.set(bool)`. El host expone **solo** `status`, `up` y `down` del CLI
+  (`SystemTailscale`), con timeout; nunca un shell.
 
 `WidgetContext`: `http`, `secrets`, `settings`, `language`, `log`, `availableWidth`,
 `capabilities`.
@@ -283,6 +286,8 @@ cornice.onTick(ts => {});
 cornice.settings;   // objeto con los valores
 cornice.language;   // "en" | "es"
 cornice.locale;     // "en_GB" | "es_ES"
+await cornice.tailscale.status();  // { status: { backendState, ip, peersOnline, … } }
+await cornice.tailscale.set(true); // up / down
 ```
 
 El `fetch` pasa por `WidgetHTTPClient` (allow-list + 30 req/min + credenciales inyectadas).
@@ -304,6 +309,7 @@ nunca se pisan carpetas del usuario).
 | `com.example.status` | Example Widget | 2.4.0 | 3×3 | network, keychain | fetch a `example.com`; credencial `Authorization: Bearer` desde `com.duque.cornice/opencode-api-key` |
 | `com.example.status` | Status | 1.3.0 | 3×3 | network | `http://192.0.2.10:8123/api/overview`; 4 barras (CPU/RAM/Disco/Backup), guests, temp, WiFi, tráfico |
 | `com.duque.clock` | Clock | 1.3.0 | 6×2 | — | demo; `defaultEnabled: false`; usa `cornice.locale` |
+| `com.duque.tailscale` | Tailscale | 1.3.0 | 6×2 | tailscale | switch de conexión + IP/peers; CLI `/usr/local/bin/tailscale` (app Store) |
 
 Todos en `BundledWidgets/`. Los HTML llevan diccionario EN/ES inline (`const ES = ...`).
 
@@ -397,6 +403,8 @@ al primer tick (1 s).
 | Cambio de idioma no llega a widgets | `setLanguage` debe remontar; no basta con asignar |
 | Prompt del Llavero en cada build | firma ad-hoc → secretos en archivo 0600, no Keychain |
 | LAN inaccesible | falta `NSLocalNetworkUsageDescription` / `NSAllowsLocalNetworking`; o no estás en la tailnet |
+| La página web se queda con el ancho viejo | devolver el `WKWebView` directo a SwiftUI no reflowea al redimensionar → contenedor con Auto Layout en `WebWidgetView` |
+| Cambias un HTML y no se ve | no subiste `version` en el manifest; el instalador solo actualiza versiones mayores |
 
 ---
 

@@ -10,18 +10,13 @@ import CorniceKit
 @MainActor
 final class WebWidget: CorniceWidget {
     private let content: WebWidgetContent
-    private let height: CGFloat
 
     init(bundle: DiskWidget, context: WidgetContext) {
         self.content = WebWidgetContent(bundle: bundle, context: context)
-        self.height = CGFloat(max(1, bundle.manifest.placement.size.rows)) * 28 + 8
     }
 
     func makeView() -> AnyView {
-        AnyView(
-            WebWidgetView(webView: content.webView)
-                .frame(height: height)
-        )
+        AnyView(WebWidgetView(webView: content.webView))
     }
 
     func activate() {}
@@ -36,8 +31,25 @@ final class WebWidget: CorniceWidget {
 struct WebWidgetView: NSViewRepresentable {
     let webView: WKWebView
 
-    func makeNSView(context: Context) -> WKWebView { webView }
-    func updateNSView(_ nsView: WKWebView, context: Context) {}
+    /// A container with Auto Layout constraints: resizing the cell resizes the
+    /// WKWebView, which makes the page reflow. Returning the web view directly kept
+    /// it laid out at its initial width.
+    func makeNSView(context: Context) -> NSView {
+        let container = NSView()
+        webView.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(webView)
+
+        NSLayoutConstraint.activate([
+            webView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            webView.topAnchor.constraint(equalTo: container.topAnchor),
+            webView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+
+        return container
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
 // MARK: - Bridge
@@ -50,6 +62,7 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
     private let http: (any HTTPClient)?
     private let settings: WidgetSettings
     private let language: WidgetLanguage
+    private let tailscale: (any TailscaleControlling)?
     private let log: WidgetLog
 
     init(bundle: DiskWidget, context: WidgetContext) {
@@ -57,6 +70,7 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         self.http = context.http
         self.settings = context.settings
         self.language = context.language
+        self.tailscale = context.tailscale
         self.log = context.log
 
         let configuration = WKWebViewConfiguration()
@@ -148,9 +162,15 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
               let method = body["method"] as? String
         else { return }
 
+        let params = body["params"] as? [String: Any] ?? [:]
+
         switch method {
         case "fetch":
-            handleFetch(id: id, params: body["params"] as? [String: Any] ?? [:])
+            handleFetch(id: id, params: params)
+        case "tailscale.status":
+            handleTailscaleStatus(id: id)
+        case "tailscale.set":
+            handleTailscaleSet(id: id, enabled: params["enabled"] as? Bool ?? false)
         default:
             respond(id: id, payload: ["ok": false, "error": "Unknown method '\(method)'"])
         }
@@ -186,6 +206,52 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         }
     }
 
+    private func handleTailscaleStatus(id: Int) {
+        guard let tailscale else {
+            respond(id: id, payload: ["ok": false, "error": "Tailscale not permitted"])
+            return
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
+            guard let status = await tailscale.status() else {
+                self.respond(id: id, payload: ["ok": false, "error": "Tailscale unavailable"])
+                return
+            }
+
+            self.respond(id: id, payload: [
+                "ok": true,
+                "status": [
+                    "backendState": status.backendState,
+                    "hostname": status.hostname ?? "",
+                    "ip": status.ip ?? "",
+                    "peersOnline": status.peersOnline,
+                    "peersTotal": status.peersTotal,
+                    "version": status.version ?? "",
+                ],
+            ])
+        }
+    }
+
+    private func handleTailscaleSet(id: Int, enabled: Bool) {
+        guard let tailscale else {
+            respond(id: id, payload: ["ok": false, "error": "Tailscale not permitted"])
+            return
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
+            switch await tailscale.setEnabled(enabled) {
+            case .success:
+                self.log.warn("tailscale \(enabled ? "up" : "down")")
+                self.respond(id: id, payload: ["ok": true])
+            case .failure(let error):
+                self.log.warn("tailscale failed: \(error.localizedDescription)")
+                self.respond(id: id, payload: ["ok": false, "error": error.localizedDescription])
+            }
+        }
+    }
+
     private func respond(id: Int, payload: [String: Any]) {
         webView.callAsyncJavaScript(
             "window.__corniceResolve(id, payload)",
@@ -202,7 +268,23 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
       const pending = new Map();
       let nextId = 1;
 
+      function request(method, params) {
+        return new Promise((resolve, reject) => {
+          const id = nextId++;
+          pending.set(id, { resolve, reject });
+          window.webkit.messageHandlers.cornice.postMessage({
+            id: id,
+            method: method,
+            params: params || {}
+          });
+        });
+      }
+
       window.cornice = {
+        tailscale: {
+          status: function () { return request('tailscale.status', {}); },
+          set: function (enabled) { return request('tailscale.set', { enabled: !!enabled }); }
+        },
         fetch(url, options) {
           options = options || {};
           return new Promise((resolve, reject) => {
