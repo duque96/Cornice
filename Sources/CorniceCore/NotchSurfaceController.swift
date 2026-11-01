@@ -416,9 +416,9 @@ public final class NotchSurfaceController {
             pager.beginDrag()
         }
 
-        // Natural scrolling reports a leftward swipe as a positive delta; invert it so
-        // swiping left pages forward.
-        pager.drag(by: -event.scrollingDeltaX, limit: width)
+        // A leftward swipe reports a negative deltaX; the offset uses the same sign
+        // (negative = page moves left), so pass it through unchanged.
+        pager.drag(by: event.scrollingDeltaX, limit: width)
 
         // A mouse wheel never reports a phase: settle when it stops.
         if event.phase == .none && event.momentumPhase == .none {
