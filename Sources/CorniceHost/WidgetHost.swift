@@ -53,8 +53,9 @@ public final class WidgetHost {
     public private(set) var discoveryErrors: [String] = []
     /// Called when the amount of content changes (mount, resize, reorder).
     public var onLayoutChange: (() -> Void)?
-    /// Language used by widget UIs. Set by the app from the settings store.
-    public var language: AppLanguage = .system
+    /// Language used by widget UIs. Set through `setLanguage` so mounted widgets
+    /// get rebuilt with the new strings.
+    public private(set) var language: AppLanguage = .system
 
     private let builtInFactories: [any WidgetFactory]
     private let secretStore: any SecretAccessing
@@ -175,6 +176,19 @@ public final class WidgetHost {
     }
 
     // MARK: - Enable / disable
+
+    /// Applies a language change and remounts everything (web views get the new
+    /// `cornice.language`).
+    public func setLanguage(_ language: AppLanguage) {
+        guard language.resolved != self.language.resolved else {
+            self.language = language
+            return
+        }
+
+        self.language = language
+        guard !widgets.isEmpty else { return }
+        reload()
+    }
 
     public func setEnabled(_ id: WidgetID, _ enabled: Bool) {
         guard let index = catalog.firstIndex(where: { $0.id == id }),

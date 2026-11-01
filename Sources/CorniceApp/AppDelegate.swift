@@ -42,7 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let host = WidgetHost(factories: [])
-        host.language = settings.settings.language
+        host.setLanguage(settings.settings.language)
         widgetHost = host
 
         controller.widgetContent = AnyView(WidgetAreaView(host: host, pager: pager))
@@ -62,7 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings.onChange = { [weak self, weak controller] in
             controller?.applySettings()
             if let language = self?.settingsStore?.settings.language {
-                self?.widgetHost?.language = language
+                self?.widgetHost?.setLanguage(language)
                 if self?.currentLanguage != language {
                     self?.currentLanguage = language
                     self?.settingsWindow?.refresh()

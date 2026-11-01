@@ -142,7 +142,7 @@ final class CapabilityTests: XCTestCase {
             preferences: WidgetPreferencesStore(url: root.appendingPathComponent("widgets.json")),
             settingsStore: WidgetSettingsStore(root: root.appendingPathComponent("settings"))
         )
-        host.language = .es
+        host.setLanguage(.es)
         host.start()
 
         XCTAssertEqual(host.language.resolved, .es)
