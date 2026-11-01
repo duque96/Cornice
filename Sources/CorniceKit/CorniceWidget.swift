@@ -24,6 +24,8 @@ public struct WidgetContext {
     public let capabilities: Set<Capability>
     /// `nil` when the widget did not declare `.keychain`.
     public let keychain: (any KeychainAccessing)?
+    /// `nil` when the widget did not declare `.network`.
+    public let http: (any HTTPClient)?
     public let log: WidgetLog
     /// Panel width the host is giving the stage, so widgets can size themselves.
     public let availableWidth: CGFloat
@@ -31,11 +33,13 @@ public struct WidgetContext {
     public init(
         capabilities: Set<Capability>,
         keychain: (any KeychainAccessing)?,
+        http: (any HTTPClient)?,
         log: WidgetLog,
         availableWidth: CGFloat
     ) {
         self.capabilities = capabilities
         self.keychain = keychain
+        self.http = http
         self.log = log
         self.availableWidth = availableWidth
     }

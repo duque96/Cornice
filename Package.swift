@@ -25,5 +25,6 @@ let package = Package(
         ),
         .testTarget(name: "CorniceCoreTests", dependencies: ["CorniceCore"]),
         .testTarget(name: "CorniceKitTests", dependencies: ["CorniceKit", "ExampleWidgetWidget"]),
+        .testTarget(name: "CorniceHostTests", dependencies: ["CorniceHost", "CorniceKit"]),
     ]
 )

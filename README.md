@@ -26,15 +26,26 @@ work: Example Widget usage, read from the same API as the ExampleWidget menu bar
 per-window color thresholds, a progress bar and the time until reset. It refreshes
 every 60 s **only while the panel is visible**, and retries every 20 s after a failure.
 
-The API key is looked up in this order:
+It only ever reads Cornice's Keychain item (`com.duque.cornice` / `opencode-api-key`).
+At launch, Cornice imports `~/.config/example-usage/key` into that item once: no prompts
+and no cross-app Keychain access.
 
-1. Cornice's Keychain item (`com.duque.cornice` / `opencode-api-key`)
-2. `~/.config/example-usage/key`
-3. The Example Usage app's Keychain item (macOS will ask for permission)
+## Capabilities
 
-It declares only `.network` and `.keychain` in its manifest, and the host gives it those
-and nothing else. The legacy file fallback is a deliberate exception for headless setups:
-there is no capability for arbitrary files yet.
+A widget declares what it needs in its manifest; the host decides what it actually gets.
+
+| Capability | Injected as | Enforced by |
+|---|---|---|
+| `.network` | `WidgetContext.http` | host allow-list (`networkHosts`, exact host or subdomain) and 30 requests/minute |
+| `.keychain` | `WidgetContext.keychain` | scoped to `keychainServices`; any other service returns `nil` |
+
+No capability means no object: `context.http` and `context.keychain` are `nil`, and the
+manifest is rejected at mount time if it declares a capability without its allow-list.
+
+The contract is also checked at build time: `testWidgetSourcesDoNotBypassTheHost` fails if
+any file under `Widgets/` mentions `URLSession`, `FileManager`, `SecItem`, `NSWorkspace`,
+`NSPasteboard` or `Process(`. An in-process Swift widget could technically bypass the host,
+so this test is what keeps first-party widgets honest until the JS runtime lands.
 
 ## Run it
 

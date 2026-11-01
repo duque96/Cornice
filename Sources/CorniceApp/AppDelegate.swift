@@ -24,6 +24,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.start()
         self.controller = controller
 
+        // Import the legacy plain-text key once, so widgets only need the Keychain.
+        LegacyCredentials.migrateLegacyKeyIfNeeded()
+
         let host = WidgetHost(factories: [ExampleWidgetWidgetFactory.self])
         host.start()
         widgetHost = host

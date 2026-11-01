@@ -79,6 +79,10 @@ public struct WidgetManifest: Sendable, Equatable {
     public let version: SemanticVersion
     public let apiVersion: Int
     public let capabilities: Set<Capability>
+    /// Hosts this widget may talk to. Required when declaring `.network`.
+    public let networkHosts: [String]
+    /// Keychain services this widget may read. Required when declaring `.keychain`.
+    public let keychainServices: [String]
     public let placement: Placement
     public let refresh: RefreshPolicy
 
@@ -88,6 +92,8 @@ public struct WidgetManifest: Sendable, Equatable {
         version: SemanticVersion,
         apiVersion: Int = WidgetManifest.currentAPIVersion,
         capabilities: Set<Capability> = [],
+        networkHosts: [String] = [],
+        keychainServices: [String] = [],
         placement: Placement,
         refresh: RefreshPolicy = .manual
     ) {
@@ -96,6 +102,8 @@ public struct WidgetManifest: Sendable, Equatable {
         self.version = version
         self.apiVersion = apiVersion
         self.capabilities = capabilities
+        self.networkHosts = networkHosts
+        self.keychainServices = keychainServices
         self.placement = placement
         self.refresh = refresh
     }
@@ -111,6 +119,12 @@ public struct WidgetManifest: Sendable, Equatable {
         }
         if placement.size.columns < 1 || placement.size.rows < 1 {
             problems.append("placement must be at least 1x1")
+        }
+        if capabilities.contains(.network) && networkHosts.isEmpty {
+            problems.append("network capability requires networkHosts")
+        }
+        if capabilities.contains(.keychain) && keychainServices.isEmpty {
+            problems.append("keychain capability requires keychainServices")
         }
         return problems
     }

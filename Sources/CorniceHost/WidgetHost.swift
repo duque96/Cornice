@@ -49,10 +49,21 @@ public final class WidgetHost {
                 continue
             }
 
+            let widgetLog = WidgetLog(subsystem: manifest.id)
+
+            let scopedKeychain: (any KeychainAccessing)? = manifest.capabilities.contains(.keychain)
+                ? ScopedKeychain(base: keychain, allowedServices: Set(manifest.keychainServices))
+                : nil
+
+            let http: (any HTTPClient)? = manifest.capabilities.contains(.network)
+                ? WidgetHTTPClient(allowedHosts: Set(manifest.networkHosts), log: widgetLog)
+                : nil
+
             let context = WidgetContext(
                 capabilities: manifest.capabilities,
-                keychain: manifest.capabilities.contains(.keychain) ? keychain : nil,
-                log: WidgetLog(subsystem: manifest.id),
+                keychain: scopedKeychain,
+                http: http,
+                log: widgetLog,
                 availableWidth: stageWidth
             )
 
