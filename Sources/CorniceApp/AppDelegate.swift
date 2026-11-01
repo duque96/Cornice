@@ -136,6 +136,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         sections.append(
             SettingsSection(
+                id: "layout",
+                title: "Layout",
+                systemImage: "rectangle.3.group",
+                content: AnyView(LayoutEditorView(host: host))
+            )
+        )
+
+        sections.append(
+            SettingsSection(
                 id: "widgets",
                 title: "Widgets",
                 systemImage: "square.grid.2x2",

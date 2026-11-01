@@ -345,6 +345,8 @@ public struct WidgetPreferences: Codable, Sendable, Equatable {
     public var disabledBuiltIns: [WidgetID] = []
     /// Explicit order, set the first time the user drags a row.
     public var order: [WidgetID] = []
+    /// Size overrides, written by the layout editor.
+    public var sizes: [WidgetID: GridSize] = [:]
 
     public init() {}
 
@@ -355,6 +357,7 @@ public struct WidgetPreferences: Codable, Sendable, Equatable {
         disabledDiskWidgets = try container.decodeIfPresent([String].self, forKey: .disabledDiskWidgets) ?? []
         disabledBuiltIns = try container.decodeIfPresent([String].self, forKey: .disabledBuiltIns) ?? []
         order = try container.decodeIfPresent([String].self, forKey: .order) ?? []
+        sizes = try container.decodeIfPresent([String: GridSize].self, forKey: .sizes) ?? [:]
     }
 }
 
@@ -382,6 +385,20 @@ public final class WidgetPreferencesStore {
 
     public func setOrder(_ ids: [WidgetID]) {
         preferences.order = ids
+        save()
+    }
+
+    public func size(for id: WidgetID) -> GridSize? {
+        preferences.sizes[id]
+    }
+
+    public func setSize(_ size: GridSize, for id: WidgetID) {
+        preferences.sizes[id] = size
+        save()
+    }
+
+    public func clearSizes() {
+        preferences.sizes = [:]
         save()
     }
 

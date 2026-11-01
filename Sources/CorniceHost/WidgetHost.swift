@@ -6,7 +6,7 @@ import CorniceKit
 public struct MountedWidget: Identifiable {
     public let id: WidgetID
     public let name: String
-    public let size: GridSize
+    public var size: GridSize
     public let view: AnyView
     let widget: any CorniceWidget
 }
@@ -25,6 +25,7 @@ public struct WidgetCatalogEntry: Identifiable, Sendable {
     public let source: Source
     public let defaultEnabled: Bool
     public let settings: [WidgetSetting]
+    public var size: GridSize
     public var enabled: Bool
 }
 
@@ -111,6 +112,7 @@ public final class WidgetHost {
                     source: .builtIn,
                     defaultEnabled: true,
                     settings: manifest.settings,
+                    size: preferences.size(for: manifest.id) ?? manifest.placement.size,
                     enabled: preferences.isEnabled(manifest.id, builtIn: true)
                 )
             )
@@ -132,6 +134,7 @@ public final class WidgetHost {
                     source: .disk,
                     defaultEnabled: bundle.defaultEnabled,
                     settings: manifest.settings,
+                    size: preferences.size(for: manifest.id) ?? manifest.placement.size,
                     enabled: preferences.isEnabled(
                         manifest.id,
                         builtIn: false,
@@ -183,6 +186,43 @@ public final class WidgetHost {
 
     public func isEnabled(_ id: WidgetID) -> Bool {
         catalog.first { $0.id == id }?.enabled ?? false
+    }
+
+    public func size(for id: WidgetID) -> GridSize {
+        catalog.first { $0.id == id }?.size ?? GridSize(columns: 6, rows: 3)
+    }
+
+    /// Applies a size to the catalog and the mounted view. `persist` is false while
+    /// the user is still dragging.
+    public func setSize(_ size: GridSize, for id: WidgetID, persist: Bool = true) {
+        let clamped = GridSize(
+            columns: min(max(1, size.columns), WidgetGridLayout.columns),
+            rows: min(max(1, size.rows), WidgetResize.maxRows)
+        )
+
+        guard let index = catalog.firstIndex(where: { $0.id == id }),
+              catalog[index].size != clamped
+        else { return }
+
+        catalog[index].size = clamped
+
+        if let widget = widgets.firstIndex(where: { $0.id == id }) {
+            widgets[widget].size = clamped
+        }
+
+        if persist {
+            preferences.setSize(clamped, for: id)
+        }
+    }
+
+    public func persistSize(for id: WidgetID) {
+        preferences.setSize(size(for: id), for: id)
+    }
+
+    /// Drops every override and goes back to the sizes declared in the manifests.
+    public func resetSizes() {
+        preferences.clearSizes()
+        reload()
     }
 
     /// Drops `id` into the slot of `target` and persists the new order.
@@ -280,7 +320,7 @@ public final class WidgetHost {
             MountedWidget(
                 id: manifest.id,
                 name: manifest.name,
-                size: manifest.placement.size,
+                size: size(for: manifest.id),
                 view: widget.makeView(),
                 widget: widget
             )

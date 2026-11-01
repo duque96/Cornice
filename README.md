@@ -22,7 +22,8 @@ pages, instead of being stacked in a list. `placement` finally means something.
 | M6 | Sidebar options window + declarative widget settings | ✅ |
 | M7 | 6-column grid with pages and trackpad swipe | ✅ |
 | M8 | Drag to reorder widgets | ✅ |
-| M9 | Native bundles with signatures | — |
+| M9 | Drag to resize widgets on the grid | ✅ |
+| M10 | Native bundles with signatures | — |
 
 ## The Example Widget widget
 
@@ -113,6 +114,11 @@ The order is yours: drag rows in *Options → Widgets* and it persists in
 unit-tested: `WidgetGridLayout.layout(widgets:available:)` returns frames, and the view only
 renders them.
 
+Sizes are yours too: in *Options → Layout* each widget has a corner handle. Dragging it
+snaps the span to columns and rows (1–6 × 1–8) and the override is stored in `widgets.json`;
+*Reset sizes* goes back to the manifest. `WidgetResize.snapped(...)` is the pure math
+behind it.
+
 The Example widget ships as 3×3 and the Clock as 3×2, so they sit side by side in the
 default 420×170 panel. Raise the panel height in *Options → Panel* for larger widgets.
 
@@ -151,6 +157,7 @@ A sidebar, one page per section, applied live:
 | **Motion** | open/close spring (response + bounce), content fade delay and duration |
 | **Interaction** | hover open/close delays |
 | **Panel** | width, height, restore defaults |
+| **Layout** | visual grid editor: drag a corner to resize, reset sizes |
 | **Widgets** | gallery: enable/disable, drag to reorder, source, capabilities, open folder, reload |
 | **<widget name>** | one page per widget that declares settings |
 

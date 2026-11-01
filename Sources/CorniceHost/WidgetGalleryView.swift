@@ -61,8 +61,10 @@ public struct WidgetGalleryView: View {
                 }
 
                 Text(
-                    entry.capabilities.map(\.rawValue).sorted().joined(separator: " · ")
-                        .isEmpty ? "no capabilities" : entry.capabilities.map(\.rawValue).sorted().joined(separator: " · ")
+                    "\(entry.size.columns)×\(entry.size.rows) · " +
+                        (entry.capabilities.isEmpty
+                            ? "no capabilities"
+                            : entry.capabilities.map(\.rawValue).sorted().joined(separator: " · "))
                 )
                 .font(.system(size: 9))
                 .foregroundStyle(.secondary)
