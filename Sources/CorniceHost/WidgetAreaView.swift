@@ -3,6 +3,9 @@ import CorniceCore
 import CorniceKit
 
 /// The stage: widgets placed on a grid, with page dots when they do not all fit.
+///
+/// No card chrome: the panel's black is the background, like the rest of the
+/// notch-app ecosystem. Widgets are separated by spacing, not by frames.
 public struct WidgetAreaView: View {
     private var host: WidgetHost
     private var pager: StagePager
@@ -26,7 +29,14 @@ public struct WidgetAreaView: View {
                     } else if !pages.isEmpty {
                         ForEach(pages[index].items) { item in
                             if let widget = byID[item.id] {
-                                card(widget, frame: item.frame)
+                                widget.view
+                                    .padding(8)
+                                    .frame(
+                                        width: item.frame.width,
+                                        height: item.frame.height,
+                                        alignment: .topLeading
+                                    )
+                                    .position(x: item.frame.midX, y: item.frame.midY)
                             }
                         }
                     }
@@ -48,34 +58,20 @@ public struct WidgetAreaView: View {
         Dictionary(uniqueKeysWithValues: host.widgets.map { ($0.id, $0) })
     }
 
+    /// Dots take space only when there is more than one page, so a single page
+    /// gets the full height.
     private func makePages(in size: CGSize) -> [WidgetGridLayout.Page] {
-        let dotsHeight: CGFloat = host.widgets.count > 0 ? 14 : 0
-        let available = CGSize(
-            width: size.width,
-            height: max(0, size.height - dotsHeight)
-        )
+        let widgets = host.widgets.map {
+            WidgetGridLayout.Widget(id: $0.id, size: $0.size)
+        }
+
+        let full = WidgetGridLayout.layout(widgets: widgets, available: size)
+        guard full.count > 1 else { return full }
 
         return WidgetGridLayout.layout(
-            widgets: host.widgets.map {
-                WidgetGridLayout.Widget(id: $0.id, size: $0.size)
-            },
-            available: available
+            widgets: widgets,
+            available: CGSize(width: size.width, height: max(0, size.height - 14))
         )
-    }
-
-    private func card(_ widget: MountedWidget, frame: CGRect) -> some View {
-        widget.view
-            .padding(12)
-            .frame(width: frame.width, height: frame.height, alignment: .topLeading)
-            .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.white.opacity(0.055))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.white.opacity(0.05), lineWidth: 1)
-                    }
-            }
-            .position(x: frame.midX, y: frame.midY)
     }
 
     private func dots(count: Int, selection: Int) -> some View {

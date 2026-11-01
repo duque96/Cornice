@@ -9,6 +9,10 @@ final class SettingsTests: XCTestCase {
             .appendingPathComponent("cornice-settings-\(UUID().uuidString).json")
     }
 
+    func testFitToContentIsOnByDefault() {
+        XCTAssertTrue(CorniceSettings.standard.fitToContent)
+    }
+
     func testDefaultsAreWithinClampRanges() {
         let defaults = CorniceSettings.standard
         XCTAssertEqual(defaults, defaults.clamped())
@@ -41,6 +45,7 @@ final class SettingsTests: XCTestCase {
         store.set(\.motion.openResponse, 0.44)
         store.set(\.expandedWidth, 520)
         store.set(\.hoverCloseDelay, 0.25)
+        store.set(\.showMenuBarIcon, false)
         store.saveNow()
 
         let reloaded = SettingsStore(url: url)
@@ -48,6 +53,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(reloaded.settings.motion.openResponse, 0.44)
         XCTAssertEqual(reloaded.settings.expandedWidth, 520)
         XCTAssertEqual(reloaded.settings.hoverCloseDelay, 0.25)
+        XCTAssertFalse(reloaded.settings.showMenuBarIcon)
     }
 
     func testCorruptedFileFallsBackToDefaults() throws {

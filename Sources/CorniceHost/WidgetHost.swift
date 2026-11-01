@@ -50,6 +50,8 @@ public final class WidgetHost {
     public private(set) var widgets: [MountedWidget] = []
     public private(set) var catalog: [WidgetCatalogEntry] = []
     public private(set) var discoveryErrors: [String] = []
+    /// Called when the amount of content changes (mount, resize, reorder).
+    public var onLayoutChange: (() -> Void)?
 
     private let builtInFactories: [any WidgetFactory]
     private let secretStore: any SecretAccessing
@@ -165,6 +167,8 @@ public final class WidgetHost {
         if isActive {
             startTicker()
         }
+
+        onLayoutChange?()
     }
 
     // MARK: - Enable / disable
@@ -182,6 +186,8 @@ public final class WidgetHost {
         } else {
             unmount(id)
         }
+
+        onLayoutChange?()
     }
 
     public func isEnabled(_ id: WidgetID) -> Bool {
@@ -213,6 +219,8 @@ public final class WidgetHost {
         if persist {
             preferences.setSize(clamped, for: id)
         }
+
+        onLayoutChange?()
     }
 
     public func persistSize(for id: WidgetID) {
@@ -239,6 +247,7 @@ public final class WidgetHost {
 
         let rank = Dictionary(uniqueKeysWithValues: updated.enumerated().map { ($1, $0) })
         widgets.sort { (rank[$0.id] ?? 0) < (rank[$1.id] ?? 0) }
+        onLayoutChange?()
     }
 
     // MARK: - Settings
@@ -264,6 +273,19 @@ public final class WidgetHost {
     }
 
     // MARK: - Lifecycle
+
+    /// Height of the tallest page, used by the surface to fit the panel to content.
+    public func preferredStageHeight(forWidth width: CGFloat) -> CGFloat {
+        guard !widgets.isEmpty, width > 0 else { return 0 }
+
+        let pages = WidgetGridLayout.layout(
+            widgets: widgets.map { WidgetGridLayout.Widget(id: $0.id, size: $0.size) },
+            available: CGSize(width: width, height: 100_000)
+        )
+
+        guard let first = pages.first else { return 0 }
+        return first.items.map(\.frame.maxY).max() ?? 0
+    }
 
     public func setActive(_ active: Bool) {
         guard active != isActive else { return }

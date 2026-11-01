@@ -19,7 +19,7 @@ struct NotchSurfaceView: View {
             height: lerp(model.notchSize.height, model.expandedSize.height)
         )
     }
-    private var topRadius: CGFloat { lerp(model.notchCornerRadius, 10) }
+    private var topFlare: CGFloat { lerp(0, 10) }
     private var bottomRadius: CGFloat { lerp(model.notchCornerRadius, 24) }
     private var contentOpacity: Double {
         guard previewProgress != nil else { return open ? 1 : 0 }
@@ -46,11 +46,11 @@ struct NotchSurfaceView: View {
     }
 
     private var silhouette: some View {
-        NotchShape(topRadius: topRadius, bottomRadius: bottomRadius)
+        NotchShape(topFlare: topFlare, bottomRadius: bottomRadius)
             .fill(Color.black)
             .frame(width: size.width, height: size.height)
             .overlay {
-                NotchShape(topRadius: topRadius, bottomRadius: bottomRadius)
+                NotchShape(topFlare: topFlare, bottomRadius: bottomRadius)
                     .stroke(Color.white.opacity(open ? 0.07 : 0), lineWidth: 1)
             }
             .animation(animation, value: open)
@@ -59,7 +59,7 @@ struct NotchSurfaceView: View {
     /// Same geometry as the silhouette, but padded to the full panel so the mask
     /// itself never changes the content's layout.
     private var maskShape: some View {
-        NotchShape(topRadius: topRadius, bottomRadius: bottomRadius)
+        NotchShape(topFlare: topFlare, bottomRadius: bottomRadius)
             .frame(width: size.width, height: size.height)
             .animation(animation, value: open)
             .frame(width: model.expandedSize.width, height: model.expandedSize.height, alignment: .top)
@@ -83,15 +83,12 @@ struct NotchSurfaceView: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 20)
         .padding(.top, 14)
+        .padding(.bottom, 12)
         .frame(width: model.expandedSize.width, height: model.expandedSize.height, alignment: .top)
     }
 
     private var header: some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(Color.green)
-                .frame(width: 5, height: 5)
-
             Text("Cornice")
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
 

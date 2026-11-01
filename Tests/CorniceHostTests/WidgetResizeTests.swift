@@ -144,4 +144,30 @@ final class WidgetSizePersistenceTests: XCTestCase {
 
         XCTAssertEqual(host.size(for: "com.example.tile"), GridSize(columns: 2, rows: 2))
     }
+
+    @MainActor
+    func testPreferredStageHeightUsesTheTallestRow() {
+        func manifest(_ id: String, columns: Int, rows: Int) -> WidgetManifest {
+            WidgetManifest(
+                id: id,
+                name: id,
+                version: SemanticVersion(1, 0, 0),
+                placement: Placement(size: GridSize(columns: columns, rows: rows))
+            )
+        }
+
+        let host = WidgetHost(
+            factories: [
+                StubFactory(manifest: manifest("com.example.a", columns: 3, rows: 3)),
+                StubFactory(manifest: manifest("com.example.b", columns: 3, rows: 2)),
+            ],
+            widgetsDirectory: root.appendingPathComponent("Widgets", isDirectory: true),
+            preferences: WidgetPreferencesStore(url: root.appendingPathComponent("widgets.json")),
+            settingsStore: WidgetSettingsStore(root: root.appendingPathComponent("settings"))
+        )
+        host.start()
+
+        // Two 3-column widgets share a row whose height is the taller one: 3 rows.
+        XCTAssertEqual(host.preferredStageHeight(forWidth: 380), 30 * 3 + 8 * 2, accuracy: 0.5)
+    }
 }

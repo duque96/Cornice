@@ -1,5 +1,59 @@
 import SwiftUI
 
+// MARK: - General
+
+public struct GeneralSettingsView: View {
+    private let store: SettingsStore
+    private let onQuit: () -> Void
+
+    public init(store: SettingsStore, onQuit: @escaping () -> Void) {
+        self.store = store
+        self.onQuit = onQuit
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("General")
+                    .font(.system(size: 17, weight: .semibold))
+                Text("How Cornice shows up on your Mac.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsGroup(title: "Menu bar") {
+                Toggle(
+                    "Show menu bar icon",
+                    isOn: Binding(
+                        get: { store.settings.showMenuBarIcon },
+                        set: { store.set(\.showMenuBarIcon, $0) }
+                    )
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+
+                Text("When off, the app only lives in the notch. Open Options from the gear inside the panel.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+
+            Divider()
+
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Quit Cornice")
+                        .font(.system(size: 12))
+                    Text("Stops the notch surface and its widgets.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Quit", role: .destructive, action: onQuit)
+            }
+        }
+    }
+}
+
 // MARK: - Motion
 
 public struct MotionSettingsView: View {
@@ -136,6 +190,20 @@ public struct PanelSettingsView: View {
             )
 
             SettingsGroup(title: "Size") {
+                Toggle(
+                    "Fit to content",
+                    isOn: Binding(
+                        get: { store.settings.fitToContent },
+                        set: { store.set(\.fitToContent, $0) }
+                    )
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+
+                Text("The panel hugs the tallest page and the height below is ignored.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+
                 SettingsSlider(
                     title: "Width",
                     keyPath: \.expandedWidth,
@@ -144,6 +212,7 @@ public struct PanelSettingsView: View {
                     format: "%.0f pt",
                     store: store
                 )
+
                 SettingsSlider(
                     title: "Height",
                     keyPath: \.expandedHeight,
@@ -152,6 +221,7 @@ public struct PanelSettingsView: View {
                     format: "%.0f pt",
                     store: store
                 )
+                .disabled(store.settings.fitToContent)
             }
 
             Divider()

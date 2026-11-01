@@ -1,19 +1,24 @@
 import SwiftUI
 
-/// The surface silhouette: flush with the top edge, rounded at the bottom.
+/// The surface silhouette: flush with the top edge.
+///
+/// The top corners are *inverted*: the top edge spans the full width and the body
+/// steps in, leaving a concave shoulder under each corner. The bottom corners are
+/// convex.
 public struct NotchShape: Shape, Animatable {
-    public var topRadius: CGFloat
+    /// Concave shoulder size. 0 gives square top corners.
+    public var topFlare: CGFloat
     public var bottomRadius: CGFloat
 
-    public init(topRadius: CGFloat = 0, bottomRadius: CGFloat = 12) {
-        self.topRadius = topRadius
+    public init(topFlare: CGFloat = 0, bottomRadius: CGFloat = 12) {
+        self.topFlare = topFlare
         self.bottomRadius = bottomRadius
     }
 
     public var animatableData: AnimatablePair<CGFloat, CGFloat> {
-        get { AnimatablePair(topRadius, bottomRadius) }
+        get { AnimatablePair(topFlare, bottomRadius) }
         set {
-            topRadius = newValue.first
+            topFlare = newValue.first
             bottomRadius = newValue.second
         }
     }
@@ -21,31 +26,40 @@ public struct NotchShape: Shape, Animatable {
     public func path(in rect: CGRect) -> Path {
         var path = Path()
 
-        let top = min(topRadius, min(rect.width, rect.height) / 2)
-        let bottom = min(bottomRadius, min(rect.width, rect.height) / 2)
+        let flare = min(max(0, topFlare), min(rect.width, rect.height) / 2)
+        let bottom = min(max(0, bottomRadius), min(rect.width, rect.height) / 2)
 
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY + top))
+        // Full-width top edge, flush with the menu bar.
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+
+        // Inverted shoulder: the body steps in, the corner stays black.
         path.addQuadCurve(
-            to: CGPoint(x: rect.minX + top, y: rect.minY),
-            control: CGPoint(x: rect.minX, y: rect.minY)
+            to: CGPoint(x: rect.maxX - flare, y: rect.minY + flare),
+            control: CGPoint(x: rect.maxX - flare, y: rect.minY)
         )
-        path.addLine(to: CGPoint(x: rect.maxX - top, y: rect.minY))
+
+        // Right side down to the convex bottom corner.
+        path.addLine(to: CGPoint(x: rect.maxX - flare, y: rect.maxY - bottom))
         path.addQuadCurve(
-            to: CGPoint(x: rect.maxX, y: rect.minY + top),
-            control: CGPoint(x: rect.maxX, y: rect.minY)
+            to: CGPoint(x: rect.maxX - flare - bottom, y: rect.maxY),
+            control: CGPoint(x: rect.maxX - flare, y: rect.maxY)
         )
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - bottom))
+
+        path.addLine(to: CGPoint(x: rect.minX + flare + bottom, y: rect.maxY))
         path.addQuadCurve(
-            to: CGPoint(x: rect.maxX - bottom, y: rect.maxY),
-            control: CGPoint(x: rect.maxX, y: rect.maxY)
+            to: CGPoint(x: rect.minX + flare, y: rect.maxY - bottom),
+            control: CGPoint(x: rect.minX + flare, y: rect.maxY)
         )
-        path.addLine(to: CGPoint(x: rect.minX + bottom, y: rect.maxY))
+
+        // Left side up, then the mirrored shoulder into the top-left corner.
+        path.addLine(to: CGPoint(x: rect.minX + flare, y: rect.minY + flare))
         path.addQuadCurve(
-            to: CGPoint(x: rect.minX, y: rect.maxY - bottom),
-            control: CGPoint(x: rect.minX, y: rect.maxY)
+            to: CGPoint(x: rect.minX, y: rect.minY),
+            control: CGPoint(x: rect.minX + flare, y: rect.minY)
         )
+
         path.closeSubpath()
-
         return path
     }
 }

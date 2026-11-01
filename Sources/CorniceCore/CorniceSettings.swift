@@ -10,22 +10,41 @@ public struct CorniceSettings: Codable, Sendable, Equatable {
     public var hoverCloseDelay: Double
     public var expandedWidth: Double
     public var expandedHeight: Double
+    /// When on, the panel hugs the tallest page and `expandedHeight` is ignored.
+    public var fitToContent: Bool
+    /// When off, the app lives only in the notch.
+    public var showMenuBarIcon: Bool
 
     public init(
         motion: NotchMotion = NotchMotion(),
         hoverOpenDelay: Double = 0.11,
         hoverCloseDelay: Double = 0.32,
         expandedWidth: Double = 420,
-        expandedHeight: Double = 170
+        expandedHeight: Double = 170,
+        fitToContent: Bool = true,
+        showMenuBarIcon: Bool = true
     ) {
         self.motion = motion
         self.hoverOpenDelay = hoverOpenDelay
         self.hoverCloseDelay = hoverCloseDelay
         self.expandedWidth = expandedWidth
         self.expandedHeight = expandedHeight
+        self.fitToContent = fitToContent
+        self.showMenuBarIcon = showMenuBarIcon
     }
 
     public static let standard = CorniceSettings()
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        motion = try container.decode(NotchMotion.self, forKey: .motion)
+        hoverOpenDelay = try container.decode(Double.self, forKey: .hoverOpenDelay)
+        hoverCloseDelay = try container.decode(Double.self, forKey: .hoverCloseDelay)
+        expandedWidth = try container.decode(Double.self, forKey: .expandedWidth)
+        expandedHeight = try container.decode(Double.self, forKey: .expandedHeight)
+        fitToContent = try container.decodeIfPresent(Bool.self, forKey: .fitToContent) ?? true
+        showMenuBarIcon = try container.decodeIfPresent(Bool.self, forKey: .showMenuBarIcon) ?? true
+    }
 
     public var expandedSize: CGSize {
         CGSize(width: expandedWidth, height: expandedHeight)

@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var controller: NotchSurfaceController?
     private var settingsWindow: SettingsWindowController?
     private var widgetHost: WidgetHost?
+    private var settingsStore: SettingsStore?
     private var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -19,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             : AutomaticNotchGeometry()
 
         let settings = SettingsStore()
+        settingsStore = settings
         let pager = StagePager()
         let controller = NotchSurfaceController(
             settings: settings,
@@ -37,16 +39,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let host = WidgetHost(factories: [])
-        host.start()
         widgetHost = host
 
         controller.widgetContent = AnyView(WidgetAreaView(host: host, pager: pager))
+        controller.stageHeightProvider = { [weak host] width in
+            host?.preferredStageHeight(forWidth: width) ?? 0
+        }
         controller.onStateChanged = { [weak host] state in
             host?.setActive(state == .open)
         }
+        host.onLayoutChange = { [weak controller] in
+            controller?.refreshStage()
+        }
 
-        settings.onChange = { [weak controller] in
+        // Start after wiring: mounting triggers the first fit-to-content pass.
+        host.start()
+
+        settings.onChange = { [weak self, weak controller] in
             controller?.applySettings()
+            self?.syncStatusItem()
         }
 
         controller.onOpenSettings = { [weak self] in
@@ -68,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             controller.setPinned(true)
         }
 
-        installStatusItem()
+        syncStatusItem()
 
         if ProcessInfo.processInfo.environment["CORNICE_START_SETTINGS"] == "1" {
             openSettings()
@@ -77,6 +88,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         controller?.stop()
+    }
+
+    private func syncStatusItem() {
+        let shouldShow = settingsStore?.settings.showMenuBarIcon ?? true
+        debugLog("menu bar icon: \(shouldShow ? "shown" : "hidden")")
+
+        if shouldShow, statusItem == nil {
+            installStatusItem()
+        } else if !shouldShow, let statusItem {
+            NSStatusBar.system.removeStatusItem(statusItem)
+            self.statusItem = nil
+        }
+    }
+
+    private func debugLog(_ message: String) {
+        guard ProcessInfo.processInfo.environment["CORNICE_DEBUG"] == "1" else { return }
+        FileHandle.standardError.write(Data("[cornice] \(message)\n".utf8))
     }
 
     private func installStatusItem() {
@@ -112,6 +140,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func makeSections(settings: SettingsStore, host: WidgetHost?) -> [SettingsSection] {
         var sections: [SettingsSection] = [
+            SettingsSection(
+                id: "general",
+                title: "General",
+                systemImage: "gearshape",
+                content: AnyView(
+                    GeneralSettingsView(store: settings) {
+                        NSApp.terminate(nil)
+                    }
+                )
+            ),
             SettingsSection(
                 id: "motion",
                 title: "Motion",

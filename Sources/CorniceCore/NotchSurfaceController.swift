@@ -19,6 +19,12 @@ public final class NotchSurfaceController {
         didSet { model.widgetContent = widgetContent }
     }
 
+    /// Height of the widget stage for a given width. Used by "fit to content".
+    public var stageHeightProvider: ((CGFloat) -> CGFloat)?
+
+    /// Chrome above and below the stage: top padding, header, spacing, bottom padding.
+    private let chromeHeight: CGFloat = 52
+
     private let settings: SettingsStore
     private let geometryProvider: NotchGeometryProviding
     public let pager: StagePager
@@ -107,6 +113,7 @@ public final class NotchSurfaceController {
         }
 
         panel.orderOut(nil)
+        isPinned = false
         isVisible = false
     }
 
@@ -127,6 +134,11 @@ public final class NotchSurfaceController {
     /// Re-applies everything the options window can change.
     public func applySettings() {
         model.motion = settings.settings.motion
+        refreshGeometry()
+    }
+
+    /// Recomputes the panel size after widgets are resized or enabled.
+    public func refreshStage() {
         refreshGeometry()
     }
 
@@ -157,10 +169,18 @@ public final class NotchSurfaceController {
             width: max(NotchGeometryMath.minimumNotchWidth, screen.frame.width - 40),
             height: max(80, screen.frame.height - 40)
         )
-        let size = CGSize(
-            width: min(preferred.width, available.width),
-            height: min(preferred.height, available.height)
-        )
+
+        let width = min(preferred.width, available.width)
+        var height = min(preferred.height, available.height)
+
+        if settings.settings.fitToContent, let stageHeightProvider {
+            let stage = stageHeightProvider(width - 40)
+            if stage > 0 {
+                height = min(max(stage + chromeHeight, 96), available.height)
+            }
+        }
+
+        let size = CGSize(width: width, height: height)
         model.expandedSize = size
 
         model.notchSize = notch.size
