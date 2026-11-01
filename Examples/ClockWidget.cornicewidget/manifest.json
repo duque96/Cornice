@@ -1,0 +1,10 @@
+{
+  "id": "com.duque.clock",
+  "name": "Clock",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "capabilities": [],
+  "placement": { "columns": 6, "rows": 2 },
+  "refresh": { "manual": true },
+  "entry": "index.html"
+}

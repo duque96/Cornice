@@ -4,13 +4,14 @@ import SwiftUI
 struct SettingsView: View {
     var store: SettingsStore
     var onPreview: (Bool) -> Void
+    var widgetsSection: AnyView? = nil
 
     @State private var pinned = false
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                SettingsForm(store: store)
+                SettingsForm(store: store, widgetsSection: widgetsSection)
                     .padding(20)
             }
 
@@ -39,6 +40,7 @@ struct SettingsView: View {
 /// The scrollable part, split out so it can be rendered and reviewed on its own.
 struct SettingsForm: View {
     var store: SettingsStore
+    var widgetsSection: AnyView? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -131,6 +133,12 @@ struct SettingsForm: View {
                     step: 5,
                     format: "%.0f pt"
                 )
+            }
+
+            if let widgetsSection {
+                group("Widgets") {
+                    widgetsSection
+                }
             }
         }
     }

@@ -10,17 +10,20 @@ public struct WidgetAreaView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(host.widgets) { item in
-                card(item)
-            }
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(host.widgets) { item in
+                    card(item)
+                }
 
-            if host.widgets.isEmpty {
-                Text("No widgets installed")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.white.opacity(0.4))
+                if host.widgets.isEmpty {
+                    Text("No widgets installed")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.white.opacity(0.4))
+                }
             }
         }
+        .scrollIndicators(.never)
     }
 
     private func card(_ item: MountedWidget) -> some View {

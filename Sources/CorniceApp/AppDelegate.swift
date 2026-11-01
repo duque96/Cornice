@@ -27,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Import the legacy plain-text key once, so widgets only need the Keychain.
         LegacyCredentials.migrateLegacyKeyIfNeeded()
 
-        let host = WidgetHost(factories: [ExampleWidgetWidgetFactory.self])
+        let host = WidgetHost(factories: [ExampleWidgetWidgetFactory()])
         host.start()
         widgetHost = host
 
@@ -44,9 +44,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.openSettings()
         }
 
-        settingsWindow = SettingsWindowController(store: settings) { [weak controller] pinned in
-            controller?.setPinned(pinned)
-        }
+        let gallery = AnyView(
+            WidgetGalleryView(host: host) {
+                WidgetBundleStore.ensureDirectoryExists()
+                NSWorkspace.shared.activateFileViewerSelecting([WidgetPaths.widgetsDirectory])
+            }
+        )
+
+        settingsWindow = SettingsWindowController(
+            store: settings,
+            onPreview: { [weak controller] pinned in
+                controller?.setPinned(pinned)
+            },
+            widgetsSection: gallery
+        )
 
         if ProcessInfo.processInfo.environment["CORNICE_START_OPEN"] == "1" {
             controller.openImmediately()

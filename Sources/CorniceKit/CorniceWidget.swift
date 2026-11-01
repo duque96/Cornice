@@ -51,16 +51,16 @@ public struct WidgetContext {
 /// visible, and never while it is hidden.
 @MainActor
 public protocol CorniceWidget: AnyObject {
-    static var manifest: WidgetManifest { get }
-    init(context: WidgetContext)
     func makeView() -> AnyView
     func activate()
     func deactivate()
     func tick(_ now: Date)
 }
 
+/// Turns a manifest into a live widget. Instance based so widgets that come from
+/// disk (where the manifest is only known at runtime) fit the same contract.
 @MainActor
 public protocol WidgetFactory {
-    static var manifest: WidgetManifest { get }
-    static func make(context: WidgetContext) -> any CorniceWidget
+    var manifest: WidgetManifest { get }
+    func make(context: WidgetContext) -> any CorniceWidget
 }

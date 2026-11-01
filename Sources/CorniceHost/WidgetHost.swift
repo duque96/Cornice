@@ -11,76 +11,156 @@ public struct MountedWidget: Identifiable {
     let widget: any CorniceWidget
 }
 
+/// One row in the widget gallery: what the host found, and whether it is mounted.
+public struct WidgetCatalogEntry: Identifiable, Sendable {
+    public enum Source: String, Sendable {
+        case builtIn
+        case disk
+    }
+
+    public let id: WidgetID
+    public let name: String
+    public let version: SemanticVersion
+    public let capabilities: Set<Capability>
+    public let source: Source
+    public var enabled: Bool
+}
+
+@MainActor
+private struct DiskWidgetFactory: WidgetFactory {
+    let bundle: DiskWidget
+
+    var manifest: WidgetManifest { bundle.manifest }
+
+    func make(context: WidgetContext) -> any CorniceWidget {
+        WebWidget(bundle: bundle, context: context)
+    }
+}
+
 /// Owns the widget lifecycle: mounting, activation and the single shared clock.
 ///
-/// There is exactly one timer for every widget, and it only runs while the
-/// surface is visible.
+/// Widgets come from two places: factories compiled into the app, and
+/// `*.cornicewidget` bundles discovered on disk. Disk widgets start disabled.
 @Observable
 @MainActor
 public final class WidgetHost {
     public private(set) var widgets: [MountedWidget] = []
+    public private(set) var catalog: [WidgetCatalogEntry] = []
+    public private(set) var discoveryErrors: [String] = []
 
-    private let factories: [any WidgetFactory.Type]
-    private let keychain: any KeychainAccessing
+    private let builtInFactories: [any WidgetFactory]
+    private let baseKeychain: any KeychainAccessing
     private let stageWidth: CGFloat
+    private let widgetsDirectory: URL
+    private let preferences: WidgetPreferencesStore
     private let log = WidgetLog(subsystem: "host")
 
+    private var factories: [WidgetID: any WidgetFactory] = [:]
     private var isActive = false
     private var ticker: Task<Void, Never>?
 
     public init(
-        factories: [any WidgetFactory.Type],
+        factories: [any WidgetFactory],
         keychain: any KeychainAccessing = SystemKeychain(),
-        stageWidth: CGFloat = 380
+        stageWidth: CGFloat = 380,
+        widgetsDirectory: URL = WidgetPaths.widgetsDirectory,
+        preferences: WidgetPreferencesStore? = nil
     ) {
-        self.factories = factories
-        self.keychain = keychain
+        self.builtInFactories = factories
+        self.baseKeychain = keychain
         self.stageWidth = stageWidth
+        self.widgetsDirectory = widgetsDirectory
+        self.preferences = preferences ?? WidgetPreferencesStore()
     }
+
+    // MARK: - Discovery
 
     public func start() {
-        guard widgets.isEmpty else { return }
+        WidgetBundleStore.ensureDirectoryExists(widgetsDirectory)
+        reload()
+    }
 
-        for factory in factories {
+    public func reload() {
+        unmountAll()
+
+        let discovery = WidgetBundleStore.discover(in: widgetsDirectory)
+        discoveryErrors = discovery.errors
+
+        var factories: [WidgetID: any WidgetFactory] = [:]
+        var entries: [WidgetCatalogEntry] = []
+
+        for factory in builtInFactories {
             let manifest = factory.manifest
-            let problems = manifest.problems
-            guard problems.isEmpty else {
-                log.warn("skipping \(manifest.id): \(problems.joined(separator: ", "))")
+            guard manifest.problems.isEmpty else {
+                log.warn("skipping \(manifest.id): \(manifest.problems.joined(separator: ", "))")
                 continue
             }
-
-            let widgetLog = WidgetLog(subsystem: manifest.id)
-
-            let scopedKeychain: (any KeychainAccessing)? = manifest.capabilities.contains(.keychain)
-                ? ScopedKeychain(base: keychain, allowedServices: Set(manifest.keychainServices))
-                : nil
-
-            let http: (any HTTPClient)? = manifest.capabilities.contains(.network)
-                ? WidgetHTTPClient(allowedHosts: Set(manifest.networkHosts), log: widgetLog)
-                : nil
-
-            let context = WidgetContext(
-                capabilities: manifest.capabilities,
-                keychain: scopedKeychain,
-                http: http,
-                log: widgetLog,
-                availableWidth: stageWidth
-            )
-
-            let widget = factory.make(context: context)
-            widgets.append(
-                MountedWidget(
+            factories[manifest.id] = factory
+            entries.append(
+                WidgetCatalogEntry(
                     id: manifest.id,
                     name: manifest.name,
-                    size: manifest.placement.size,
-                    view: widget.makeView(),
-                    widget: widget
+                    version: manifest.version,
+                    capabilities: manifest.capabilities,
+                    source: .builtIn,
+                    enabled: preferences.isEnabled(manifest.id, builtIn: true)
                 )
             )
+        }
 
-            log.warn("mounted \(manifest.id) \(manifest.version)")
+        for bundle in discovery.widgets {
+            let manifest = bundle.manifest
+            guard factories[manifest.id] == nil else {
+                discoveryErrors.append("\(manifest.id): duplicated id, ignoring the disk copy")
+                continue
+            }
+            factories[manifest.id] = DiskWidgetFactory(bundle: bundle)
+            entries.append(
+                WidgetCatalogEntry(
+                    id: manifest.id,
+                    name: manifest.name,
+                    version: manifest.version,
+                    capabilities: manifest.capabilities,
+                    source: .disk,
+                    enabled: preferences.isEnabled(manifest.id, builtIn: false)
+                )
+            )
+        }
+
+        self.factories = factories
+        catalog = entries
+
+        for entry in entries where entry.enabled {
+            mount(entry.id)
+        }
+
+        if isActive {
+            startTicker()
         }
     }
+
+    // MARK: - Enable / disable
+
+    public func setEnabled(_ id: WidgetID, _ enabled: Bool) {
+        guard let index = catalog.firstIndex(where: { $0.id == id }),
+              catalog[index].enabled != enabled
+        else { return }
+
+        preferences.setEnabled(id, builtIn: catalog[index].source == .builtIn, enabled)
+        catalog[index].enabled = enabled
+
+        if enabled {
+            mount(id)
+        } else {
+            unmount(id)
+        }
+    }
+
+    public func isEnabled(_ id: WidgetID) -> Bool {
+        catalog.first { $0.id == id }?.enabled ?? false
+    }
+
+    // MARK: - Lifecycle
 
     public func setActive(_ active: Bool) {
         guard active != isActive else { return }
@@ -100,6 +180,63 @@ public final class WidgetHost {
             stopTicker()
         }
     }
+
+    private func mount(_ id: WidgetID) {
+        guard !widgets.contains(where: { $0.id == id }), let factory = factories[id] else { return }
+
+        let manifest = factory.manifest
+        let widgetLog = WidgetLog(subsystem: manifest.id)
+
+        let scopedKeychain: (any KeychainAccessing)? = manifest.capabilities.contains(.keychain)
+            ? ScopedKeychain(base: baseKeychain, allowedServices: Set(manifest.keychainServices))
+            : nil
+
+        let http: (any HTTPClient)? = manifest.capabilities.contains(.network)
+            ? WidgetHTTPClient(allowedHosts: Set(manifest.networkHosts), log: widgetLog)
+            : nil
+
+        let context = WidgetContext(
+            capabilities: manifest.capabilities,
+            keychain: scopedKeychain,
+            http: http,
+            log: widgetLog,
+            availableWidth: stageWidth
+        )
+
+        let widget = factory.make(context: context)
+        widgets.append(
+            MountedWidget(
+                id: manifest.id,
+                name: manifest.name,
+                size: manifest.placement.size,
+                view: widget.makeView(),
+                widget: widget
+            )
+        )
+
+        if isActive {
+            widget.activate()
+        }
+
+        log.warn("mounted \(manifest.id) \(manifest.version)")
+    }
+
+    private func unmount(_ id: WidgetID) {
+        guard let index = widgets.firstIndex(where: { $0.id == id }) else { return }
+        widgets[index].widget.deactivate()
+        widgets.remove(at: index)
+        log.warn("unmounted \(id)")
+    }
+
+    private func unmountAll() {
+        for item in widgets {
+            item.widget.deactivate()
+        }
+        widgets.removeAll()
+        stopTicker()
+    }
+
+    // MARK: - Clock
 
     private func startTicker() {
         ticker?.cancel()

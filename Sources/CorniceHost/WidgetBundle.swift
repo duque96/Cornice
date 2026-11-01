@@ -1,0 +1,306 @@
+import Foundation
+import CorniceKit
+
+// MARK: - Paths
+
+public enum WidgetPaths {
+    public static var supportDirectory: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
+        return base.appendingPathComponent("Cornice", isDirectory: true)
+    }
+
+    public static var widgetsDirectory: URL {
+        supportDirectory.appendingPathComponent("Widgets", isDirectory: true)
+    }
+
+    public static var preferencesURL: URL {
+        supportDirectory.appendingPathComponent("widgets.json")
+    }
+}
+
+// MARK: - On-disk manifest
+
+/// The JSON a widget author writes. Deliberately friendlier than the runtime struct:
+/// version as a string, grid as columns/rows, capabilities as strings.
+public struct DiskWidgetManifest: Decodable, Sendable {
+    struct PlacementDTO: Decodable, Sendable {
+        let columns: Int
+        let rows: Int
+        let priority: Int?
+    }
+
+    struct RefreshDTO: Decodable, Sendable {
+        let interval: Double?
+        let manual: Bool?
+    }
+
+    let id: String
+    let name: String
+    let version: String
+    let apiVersion: Int
+    let capabilities: [String]?
+    let networkHosts: [String]?
+    let keychainServices: [String]?
+    let placement: PlacementDTO?
+    let refresh: RefreshDTO?
+    let entry: String?
+}
+
+public struct DiskWidget: Sendable {
+    public let manifest: WidgetManifest
+    public let directory: URL
+    public let entry: URL
+}
+
+public enum DiskWidgetError: LocalizedError, Equatable {
+    case missingManifest
+    case unreadableManifest(String)
+    case invalidVersion(String)
+    case unknownCapability(String)
+    case missingEntry(String)
+    case entryEscapesBundle
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingManifest: return "manifest.json is missing"
+        case .unreadableManifest(let detail): return "manifest.json is invalid: \(detail)"
+        case .invalidVersion(let value): return "version '\(value)' is not semver"
+        case .unknownCapability(let value): return "unknown capability '\(value)'"
+        case .missingEntry(let path): return "entry '\(path)' does not exist"
+        case .entryEscapesBundle: return "entry must stay inside the bundle"
+        }
+    }
+}
+
+// MARK: - Discovery
+
+/// Component-wise containment: string prefix checks break on trailing slashes and on
+/// the `/var` vs `/private/var` duality of macOS temporary directories.
+enum PathContainment {
+    static func contains(_ parent: URL, _ child: URL) -> Bool {
+        let parentParts = normalized(parent)
+        let childParts = normalized(child)
+        guard childParts.count > parentParts.count else { return false }
+        return Array(childParts.prefix(parentParts.count)) == parentParts
+    }
+
+    private static func normalized(_ url: URL) -> [String] {
+        var parts = url.standardizedFileURL.pathComponents
+        if parts.count > 1 && parts[1] == "private" {
+            parts.remove(at: 1)
+        }
+        return parts
+    }
+}
+
+public enum WidgetBundleStore {
+    public static let bundleExtension = "cornicewidget"
+
+    public struct Discovery: Sendable {
+        public var widgets: [DiskWidget]
+        public var errors: [String]
+    }
+
+    public static func ensureDirectoryExists(_ directory: URL = WidgetPaths.widgetsDirectory) {
+        guard !FileManager.default.fileExists(atPath: directory.path) else { return }
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? readme.write(
+            to: directory.appendingPathComponent("README.md"),
+            atomically: true,
+            encoding: .utf8
+        )
+    }
+
+    public static func discover(in directory: URL = WidgetPaths.widgetsDirectory) -> Discovery {
+        let contents = (try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+
+        var widgets: [DiskWidget] = []
+        var errors: [String] = []
+
+        for url in contents.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+            guard url.pathExtension == bundleExtension else { continue }
+
+            do {
+                widgets.append(try load(bundleAt: url))
+            } catch {
+                errors.append("\(url.lastPathComponent): \(error.localizedDescription)")
+            }
+        }
+
+        return Discovery(widgets: widgets, errors: errors)
+    }
+
+    public static func load(bundleAt directory: URL) throws -> DiskWidget {
+        let manifestURL = directory.appendingPathComponent("manifest.json")
+        guard let data = FileManager.default.contents(atPath: manifestURL.path) else {
+            throw DiskWidgetError.missingManifest
+        }
+
+        let dto: DiskWidgetManifest
+        do {
+            dto = try JSONDecoder().decode(DiskWidgetManifest.self, from: data)
+        } catch {
+            throw DiskWidgetError.unreadableManifest(error.localizedDescription)
+        }
+
+        guard let version = parseVersion(dto.version) else {
+            throw DiskWidgetError.invalidVersion(dto.version)
+        }
+
+        let capabilities = try (dto.capabilities ?? []).map { raw -> Capability in
+            guard let capability = Capability(rawValue: raw) else {
+                throw DiskWidgetError.unknownCapability(raw)
+            }
+            return capability
+        }
+
+        let placement = dto.placement.map {
+            Placement(
+                size: GridSize(columns: max(1, $0.columns), rows: max(1, $0.rows)),
+                priority: $0.priority ?? 0
+            )
+        } ?? Placement(size: GridSize(columns: 6, rows: 3))
+
+        let refresh: RefreshPolicy
+        if let interval = dto.refresh?.interval {
+            refresh = .interval(max(1, interval))
+        } else {
+            refresh = .manual
+        }
+
+        let manifest = WidgetManifest(
+            id: dto.id,
+            name: dto.name,
+            version: version,
+            apiVersion: dto.apiVersion,
+            capabilities: Set(capabilities),
+            networkHosts: dto.networkHosts ?? [],
+            keychainServices: dto.keychainServices ?? [],
+            placement: placement,
+            refresh: refresh
+        )
+
+        let problems = manifest.problems
+        guard problems.isEmpty else {
+            throw DiskWidgetError.unreadableManifest(problems.joined(separator: ", "))
+        }
+
+        let entryName = dto.entry ?? "index.html"
+        let entry = directory.appendingPathComponent(entryName).standardizedFileURL
+        let root = directory.standardizedFileURL
+
+        guard PathContainment.contains(root, entry) else {
+            throw DiskWidgetError.entryEscapesBundle
+        }
+        guard FileManager.default.fileExists(atPath: entry.path) else {
+            throw DiskWidgetError.missingEntry(entryName)
+        }
+
+        return DiskWidget(manifest: manifest, directory: root, entry: entry)
+    }
+
+    private static func parseVersion(_ raw: String) -> SemanticVersion? {
+        let parts = raw.split(separator: ".")
+        guard parts.count == 3,
+              let major = Int(parts[0]),
+              let minor = Int(parts[1]),
+              let patch = Int(parts[2])
+        else { return nil }
+        return SemanticVersion(major, minor, patch)
+    }
+
+    private static let readme = """
+    # Cornice widgets
+
+    Drop `*.cornicewidget` bundles here, then enable them in Options → Widgets.
+
+    A bundle is a folder:
+
+        MyWidget.cornicewidget/
+          manifest.json
+          index.html
+
+    manifest.json:
+
+        {
+          "id": "com.example.my-widget",
+          "name": "My Widget",
+          "version": "1.0.0",
+          "apiVersion": 1,
+          "capabilities": ["network"],
+          "networkHosts": ["example.com"],
+          "placement": { "columns": 6, "rows": 3 },
+          "refresh": { "interval": 60 },
+          "entry": "index.html"
+        }
+
+    The page talks to the host through `window.cornice`:
+
+        const response = await cornice.fetch("https://example.com/data.json");
+        // { status: 200, text: "..." }
+
+        cornice.onTick((timestamp) => { /* once per second while visible */ });
+
+    Widgets are sandboxed: no files, no Keychain, no URLSession. Requests are limited to
+    the hosts declared in the manifest.
+    """
+}
+
+// MARK: - Preferences
+
+public struct WidgetPreferences: Codable, Sendable, Equatable {
+    public var enabledDiskWidgets: [WidgetID] = []
+    public var disabledBuiltIns: [WidgetID] = []
+
+    public init() {}
+}
+
+@MainActor
+public final class WidgetPreferencesStore {
+    private let url: URL
+    private var preferences: WidgetPreferences
+
+    public init(url: URL = WidgetPaths.preferencesURL) {
+        self.url = url
+        self.preferences = (try? Data(contentsOf: url))
+            .flatMap { try? JSONDecoder().decode(WidgetPreferences.self, from: $0) } ?? WidgetPreferences()
+    }
+
+    public var current: WidgetPreferences { preferences }
+
+    public func isEnabled(_ id: WidgetID, builtIn: Bool) -> Bool {
+        builtIn
+            ? !preferences.disabledBuiltIns.contains(id)
+            : preferences.enabledDiskWidgets.contains(id)
+    }
+
+    public func setEnabled(_ id: WidgetID, builtIn: Bool, _ enabled: Bool) {
+        if builtIn {
+            preferences.disabledBuiltIns.removeAll { $0 == id }
+            if !enabled { preferences.disabledBuiltIns.append(id) }
+        } else {
+            preferences.enabledDiskWidgets.removeAll { $0 == id }
+            if enabled { preferences.enabledDiskWidgets.append(id) }
+        }
+        save()
+    }
+
+    private func save() {
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try encoder.encode(preferences).write(to: url, options: .atomic)
+        } catch {
+            FileHandle.standardError.write(Data("[widgets] preferences save failed: \(error)\n".utf8))
+        }
+    }
+}

@@ -6,11 +6,17 @@ import SwiftUI
 public final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let store: SettingsStore
     private let onPreview: (Bool) -> Void
+    private let widgetsSection: AnyView?
     private var window: NSWindow?
 
-    public init(store: SettingsStore, onPreview: @escaping (Bool) -> Void) {
+    public init(
+        store: SettingsStore,
+        onPreview: @escaping (Bool) -> Void,
+        widgetsSection: AnyView? = nil
+    ) {
         self.store = store
         self.onPreview = onPreview
+        self.widgetsSection = widgetsSection
         super.init()
     }
 
@@ -26,7 +32,11 @@ public final class SettingsWindowController: NSObject, NSWindowDelegate {
             window.isReleasedWhenClosed = false
             window.delegate = self
             window.contentView = NSHostingView(
-                rootView: SettingsView(store: store, onPreview: onPreview)
+                rootView: SettingsView(
+                    store: store,
+                    onPreview: onPreview,
+                    widgetsSection: widgetsSection
+                )
             )
             window.center()
             self.window = window

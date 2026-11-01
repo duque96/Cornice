@@ -71,13 +71,14 @@ struct NotchSurfaceView: View {
 
             if let widgetContent = model.widgetContent {
                 widgetContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             } else {
                 Text("No widgets installed")
                     .font(.system(size: 11))
                     .foregroundStyle(Color.white.opacity(0.4))
-            }
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
+            }
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 20)

@@ -8,8 +8,9 @@ A modular host for the MacBook notch. The notch becomes a surface for widgets, a
 
 ## Status
 
-**M2 — SDK, host and the first widget.** The surface, the options window and a real widget
-work: Example Widget usage, read from the same API as the ExampleWidget menu bar app.
+**M4 — widgets from disk.** The surface, the options window, the SDK, the host and the
+first widget all work. Widgets are no longer compiled in: drop a `*.cornicewidget` bundle
+in Application Support and enable it from Options.
 
 | Milestone | Content | Done |
 |---|---|---|
@@ -17,8 +18,8 @@ work: Example Widget usage, read from the same API as the ExampleWidget menu bar
 | M1 | Options window, persisted settings | ✅ |
 | M2 | `CorniceKit` SDK + `CorniceHost` (mount, clock, capabilities) | ✅ |
 | M3 | First widget: Example Widget usage | ✅ |
-| M4 | More widgets, layout solver with pages, capability grants UI | — |
-| M5 | `CorniceJS` runtime | — |
+| M4 | Widgets from disk (HTML/JS in a sandbox) + gallery | ✅ |
+| M5 | Layout solver with pages, native bundle loading with signatures | — |
 
 ## The first widget
 
@@ -29,6 +30,45 @@ every 60 s **only while the panel is visible**, and retries every 20 s after a f
 It only ever reads Cornice's Keychain item (`com.duque.cornice` / `opencode-api-key`).
 At launch, Cornice imports `~/.config/example-usage/key` into that item once: no prompts
 and no cross-app Keychain access.
+
+## Widgets from disk
+
+A widget is a folder in `~/Library/Application Support/Cornice/Widgets`:
+
+```
+ClockWidget.cornicewidget/
+  manifest.json
+  index.html
+```
+
+```json
+{
+  "id": "com.example.clock",
+  "name": "Clock",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "capabilities": ["network"],
+  "networkHosts": ["example.com"],
+  "placement": { "columns": 6, "rows": 3 },
+  "refresh": { "interval": 60 },
+  "entry": "index.html"
+}
+```
+
+The page talks to the host through `window.cornice`:
+
+```js
+const res = await cornice.fetch("https://example.com/data.json"); // { status, text }
+cornice.onTick((timestamp) => { /* once per second while visible */ });
+```
+
+Disk widgets start **disabled**: enable them in *Options → Widgets*, where you can also
+reveal the folder and reload. They run in a `WKWebView` with a non-persistent data store,
+no file access, no Keychain, no `URLSession`, and navigation confined to the bundle. The
+only way out is `cornice.fetch`, which goes through the same host allow-list and rate limit
+as native widgets.
+
+Copy `Examples/ClockWidget.cornicewidget` there to try it.
 
 ## Capabilities
 
@@ -90,10 +130,12 @@ CORNICE_SNAPSHOT_DIR=/tmp/cornice swift test
 Sources/
   CorniceCore/      # notch geometry, panel, animation, input
   CorniceKit/       # public SDK: manifests, capabilities, CorniceWidget
-  CorniceHost/      # mounting, activation, shared clock, keychain
+  CorniceHost/      # mounting, clock, capabilities, disk loader, web sandbox
   CorniceApp/       # @main, composition root
 Widgets/
-  ExampleWidget/    # first widget
+  ExampleWidget/    # first widget (compiled in)
+Examples/
+  ClockWidget.cornicewidget/
 Tests/
 ```
 
