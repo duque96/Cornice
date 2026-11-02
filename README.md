@@ -246,4 +246,4 @@ CORNICE_SNAPSHOT_DIR=/tmp/cornice swift test
 
 ## License
 
-TBD.
+MIT. See `LICENSE`.
