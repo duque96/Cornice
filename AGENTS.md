@@ -11,25 +11,40 @@ español porque es la nota de trabajo.
 
 ## 1. Qué es Cornice
 
-Host modular para el notch del MacBook. El notch es una superficie donde se montan widgets;
-los widgets son bundles HTML/JS que se cargan desde disco, declaran capacidades y nunca
-tocan el sistema directamente.
+Host modular para el notch del MacBook, orientado a **desarrolladores y homelabs**. El notch
+es una superficie donde se montan widgets; los widgets son bundles HTML/JS que se cargan
+desde disco, declaran capacidades y nunca tocan el sistema directamente.
 
 - **App**: `Cornice.app` (accesoria, sin Dock; icono de barra opcional).
 - **SDK**: `CorniceKit` — manifiesto, capacidades, settings, contexto, `CorniceWidget`.
-- **Host**: `CorniceHost` — montaje, reloj, capacidades, llavero, loader de disco, UI de ajustes.
+- **Host**: `CorniceHost` — montaje, reloj, capacidades, secretos, loader de disco, UI de ajustes.
 - **Core**: `CorniceCore` — panel, geometría, animación, ajustes, localización.
 
-Estado: M11. 87 tests. Instalado en `~/Applications/Cornice.app` bajo LaunchAgent
-`com.duque.cornice` (arranque al login, sin icono de menú por decisión del usuario).
+Estado: M11. 91 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
+App Store.
 
-> Contexto del entorno: el usuario tiene un homelab (`proxmox` 192.0.2.10, dashboard en
-> `:8123`). Si una tarea toca el homelab, aplica también `~/.config/opencode/AGENTS.md` y el
-> repo `~/homeserver` (pull antes, nota después).
+> Si una tarea toca el homelab, aplica también `~/.config/opencode/AGENTS.md` y el repo
+> `~/homeserver` (pull antes, nota después).
 
 ---
 
-## 2. Mapa del repo
+## 2. Privacidad (leer antes de escribir docs)
+
+**Los widgets first-party de este repo son personales.** No documentes, nombres ni describas
+en `README.md`, en este archivo, en commits o en notas públicas:
+
+- sus nombres o IDs,
+- sus endpoints, hosts o IPs,
+- sus credenciales o servicios de secretos,
+- capturas de su UI.
+
+Si necesitas contexto para mantenerlos, lee su `manifest.json` y su código. Al escribir
+documentación usa ejemplos neutros (`com.example.*`, `example.com`, `192.0.2.10`). Esta regla
+aplica también a los mensajes de commit.
+
+---
+
+## 3. Mapa del repo
 
 ```
 Sources/
@@ -37,7 +52,7 @@ Sources/
   CorniceCore/       panel, geometría, estado, ajustes, shell de Opciones
   CorniceHost/       host de widgets, loader de disco, sandbox web, UI de widgets
   CorniceApp/        @main, AppDelegate, composición de secciones
-BundledWidgets/      widgets que viajan dentro de la app (.cornicewidget)
+BundledWidgets/      bundles que viajan dentro de la app (contenido personal; ver §2)
 Tests/
   CorniceCoreTests/  geometría, máquina de estados, ajustes, pager
   CorniceKitTests/   contrato de manifiesto, HTTP
@@ -65,11 +80,11 @@ Widgets de disco → solo ven el bridge JS, nunca Swift
 
 ---
 
-## 3. Build, test, install
+## 4. Build, test, install
 
 ```bash
 swift build                      # debug
-swift test                       # 87 tests
+swift test                       # 91 tests
 ./build-app.sh                   # release + dist/Cornice.app (copia BundledWidgets a Resources)
 ./install.sh                     # ~/Applications + LaunchAgent (arranque al login)
 ./uninstall.sh                   # quita app y agente; conserva datos
@@ -104,7 +119,7 @@ Logs de producción: `~/Library/Logs/Cornice/{out,err}.log`.
 
 ---
 
-## 4. La superficie (CorniceCore)
+## 5. La superficie (CorniceCore)
 
 ### Ventana
 
@@ -131,19 +146,27 @@ Reglas que no hay que romper:
   (`topFlare = 10`), esquinas inferiores convexas (`24`). Es la forma de BoringNotch /
   DynamicNotchKit. No volver a “redondear hacia dentro”.
 - `NotchInteractionMachine` (puro): `dormant → armed → open`; el controlador pone los timers.
-- `StagePager`: página actual + `offset` de arrastre + `isDragging`. El swipe horizontal
-  mueve la página con el dedo; solo durante el gesto se montan las páginas vecinas (los
-  widgets de cada página son disjuntos, así que no se duplica ningún `WKWebView`). Al soltar,
-  un spring decide: `|offset| > max(40, 22% del ancho)` avanza, si no vuelve. El signo de
-  `scrollingDeltaX` se invierte para que deslizar a la izquierda pase página.
+
+### Paginación
+
+`StagePager`: página actual + `offset` de arrastre + `isDragging`.
+
+- El swipe horizontal mueve la página con el dedo. `drag(by:)` recibe `scrollingDeltaX`
+  **sin invertir** (dedo a la izquierda ⇒ delta negativo ⇒ offset negativo ⇒ página
+  siguiente). No reintroduzcas una negación: ya hubo dos bugs por eso.
+- Solo durante el gesto se montan las páginas vecinas (`visiblePages`). Los widgets de cada
+  página son disjuntos, así que no se duplica ningún `WKWebView`.
+- Al soltar, spring: si `|offset| > max(40, 22 % del ancho)` avanza; si no, vuelve.
+  `isDragging` se mantiene 380 ms para que la animación termine.
+- Momentum: se espera a `momentumPhase == .ended`; fallback de 0,18 s al levantar el dedo.
+  Rueda de ratón (sin fases): debounce de 0,16 s.
 
 ### Alto automático
 
-`CorniceSettings.fitToContent` (por defecto **on**): el controlador pide
+`CorniceSettings.fitToContent` (default **on**): el controlador pide
 `WidgetHost.preferredStageHeight(forWidth:)` y suma `chromeHeight = 52`
 (14 top + ~16 header + 10 gap + 12 bottom). El alto configurado se ignora mientras esté on.
-Si el contenido cambia (montar, redimensionar, reordenar), `host.onLayoutChange` →
-`controller.refreshStage()`.
+Si el contenido cambia, `host.onLayoutChange` → `controller.refreshStage()`.
 
 ### Etapa sin tarjetas
 
@@ -153,7 +176,7 @@ Si el contenido cambia (montar, redimensionar, reordenar), `host.onLayoutChange`
 
 ---
 
-## 5. Layout
+## 6. Layout
 
 - Grid de 6 columnas. `columns` = span 1–6; `rows` = altura.
 - `rowUnit = 30`, `gap = 8`; altura de celda `30r + 8(r−1)`.
@@ -163,10 +186,12 @@ Si el contenido cambia (montar, redimensionar, reordenar), `host.onLayoutChange`
 - Redimensionado: *Options → Layout*, arrastrando la esquina. `WidgetResize.snapped(...)`
   convierte el delta a celdas (clamp 1–6 × 1–8). Persiste en `widgets.json.sizes`; se
   escribe al soltar, no en cada frame.
+- Con `fitToContent` on y poco contenido, todo cabe en una página: no hay swipe que probar.
+  Para QA de paginación, desactiva el ajuste y baja la altura.
 
 ---
 
-## 6. Ajustes de la app
+## 7. Ajustes de la app
 
 `CorniceSettings` (JSON en `~/Library/Application Support/Cornice/settings.json`, envoltorio
 `schemaVersion` + `settings`):
@@ -177,7 +202,7 @@ Si el contenido cambia (montar, redimensionar, reordenar), `host.onLayoutChange`
 | `hoverOpenDelay` / `hoverCloseDelay` | tiempos del hover |
 | `expandedWidth` / `expandedHeight` | tamaño; alto ignorado con `fitToContent` |
 | `fitToContent` | el panel se ajusta al contenido (default `true`) |
-| `showMenuBarIcon` | icono en barra de menús (default `true`; el usuario lo tiene off) |
+| `showMenuBarIcon` | icono en barra de menús (default `true`) |
 | `language` | `system` / `en` / `es` |
 
 Reglas:
@@ -194,7 +219,7 @@ Reglas:
 
 ---
 
-## 7. Sistema de widgets
+## 8. Sistema de widgets
 
 ### SDK (`CorniceKit`)
 
@@ -216,8 +241,8 @@ WidgetManifest(id:name:version:apiVersion:capabilities:networkHosts:keychainServ
   `cornice.tailscale.set(bool)`. El host expone **solo** `status`, `up` y `down` del CLI
   (`SystemTailscale`), con timeout; nunca un shell.
 
-`WidgetContext`: `http`, `secrets`, `settings`, `language`, `log`, `availableWidth`,
-`capabilities`.
+`WidgetContext`: `http`, `secrets`, `settings`, `language`, `tailscale`, `log`,
+`availableWidth`, `capabilities`.
 
 `CorniceWidget`: `makeView()`, `activate()`, `deactivate()`, `tick(Date)`.
 `WidgetFactory`: `manifest` + `make(context:)` (instancia, no estático, para widgets de disco).
@@ -244,7 +269,7 @@ WidgetManifest(id:name:version:apiVersion:capabilities:networkHosts:keychainServ
 
 ---
 
-## 8. Widgets desde disco
+## 9. Widgets desde disco
 
 Formato: `~/Library/Application Support/Cornice/Widgets/<Nombre>.cornicewidget/`
 
@@ -257,10 +282,10 @@ index.html
 {
   "id": "com.example.status",
   "name": "Status",
-  "version": "1.3.0",
+  "version": "1.0.0",
   "apiVersion": 1,
   "capabilities": ["network"],
-  "networkHosts": ["192.0.2.10"],
+  "networkHosts": ["status.example.com"],
   "keychainServices": [],
   "credentials": [],
   "settings": [
@@ -289,12 +314,15 @@ cornice.onTick(ts => {});
 cornice.settings;   // objeto con los valores
 cornice.language;   // "en" | "es"
 cornice.locale;     // "en_GB" | "es_ES"
-await cornice.tailscale.status();  // { status: { backendState, ip, peersOnline, … } }
-await cornice.tailscale.set(true); // up / down
+await cornice.tailscale.status();
+await cornice.tailscale.set(true);
 ```
 
 El `fetch` pasa por `WidgetHTTPClient` (allow-list + 30 req/min + credenciales inyectadas).
 Un widget **nunca** debe hablar con el sistema por su cuenta.
+
+`WebWidgetView` envuelve el `WKWebView` en un `NSView` con Auto Layout: devolverlo directo a
+SwiftUI no reflowea la página al cambiar el tamaño de la celda.
 
 ### Instalación y upgrades
 
@@ -305,34 +333,32 @@ nunca se pisan carpetas del usuario).
 
 ---
 
-## 9. Widgets incluidos
+## 10. Widgets incluidos
 
-| id | Nombre | Ver | Tamaño | Capacidades | Notas |
-|---|---|---|---|---|---|
-| `com.example.status` | Example Widget | 2.4.0 | 3×3 | network, keychain | fetch a `example.com`; credencial `Authorization: Bearer` desde `com.duque.cornice/opencode-api-key` |
-| `com.example.status` | Status | 1.3.0 | 3×3 | network | `http://192.0.2.10:8123/api/overview`; 4 barras (CPU/RAM/Disco/Backup), guests, temp, WiFi, tráfico |
-| `com.duque.clock` | Clock | 1.3.0 | 6×2 | — | demo; `defaultEnabled: false`; usa `cornice.locale` |
-| `com.duque.tailscale` | Tailscale | 1.3.0 | 6×2 | tailscale | switch de conexión + IP/peers; CLI `/usr/local/bin/tailscale` (app Store) |
+Los bundles de `BundledWidgets/` son **personales**: no se documentan aquí ni en el README
+(§2). Su manifest es la fuente de verdad. Si trabajas en uno, no publiques sus endpoints,
+IDs, credenciales ni capturas.
 
-Todos en `BundledWidgets/`. Los HTML llevan diccionario EN/ES inline (`const ES = ...`).
+El host ignora manifests con `problems`; el test `testEveryBundledWidgetLoads` recorre la
+carpeta y falla si alguno es inválido.
 
 ---
 
-## 10. Secretos
+## 11. Secretos
 
 `FileSecretStore`: un archivo por `service/account` bajo
 `~/Library/Application Support/Cornice/secrets/`, permisos `0600`.
 
 **Por qué no el Llavero**: las builds ad-hoc cambian de firma en cada rebuild y macOS
 vuelve a pedir permiso (llegó a bloquear el arranque). El modelo de amenaza es el mismo que
-el archivo plano que ya existía (`~/.config/example-usage/key`), y el widget sigue sin
-poder leerlo: solo el host inyecta la credencial.
+el de un archivo plano de usuario, y el widget sigue sin poder leerlo: solo el host inyecta
+la credencial al hacer `fetch`.
 
-`LegacyCredentials.migrateLegacyKeyIfNeeded()` importa la key legacy al arrancar.
+Hay un migrador de credenciales legacy en el host; no documentes de dónde lee.
 
 ---
 
-## 11. Localización
+## 12. Localización
 
 - `AppLanguage` (`system`/`en`/`es`) + `Translator(language)("English", "Español")` en Core.
   Sin `.strings` ni bundles de recursos: el cambio es en caliente.
@@ -341,17 +367,17 @@ poder leerlo: solo el host inyecta la credencial.
 - Cambiar idioma: `settings.onChange` → `host.setLanguage` (remonta widgets) +
   `settingsWindow.refresh()` (reconstruye sidebar/título).
 - Los títulos del sidebar viven en `AppDelegate.makeSections`, no en Core.
-- Nombres de producto (“Example Widget”, “Status”) no se traducen.
+- Los nombres de producto de los widgets personales no se traducen ni se documentan.
 
 ---
 
-## 12. Tests
+## 13. Tests
 
 ```bash
 swift test
 ```
 
-87 tests. Cobertura por área:
+91 tests. Cobertura por área:
 
 - Geometría del notch y zonas (puro).
 - Máquina de estados del hover.
@@ -368,12 +394,9 @@ swift test
 
 Snapshots (a `$CORNICE_SNAPSHOT_DIR`): superficie, filmstrip de transición, formulario.
 
-Al añadir un widget incluido, añade/actualiza su test de carga (ya hay uno que recorre
-`BundledWidgets/`).
-
 ---
 
-## 13. Verificar visualmente
+## 14. Verificar visualmente
 
 La UI vive en una ventana sin key window; para revisarla, captura por región:
 
@@ -386,50 +409,53 @@ Usa `screencapture -R` sobre los bounds de `CGWindowList`. Requiere permiso de g
 pantalla. Si el panel no aparece, comprueba que no está dormido: lánzalo con
 `CORNICE_START_OPEN=1` (pinea) y **sin** el agente cargado.
 
-Para ver datos reales de los widgets, abre la superficie (hover o `START_OPEN`) y espera
-al primer tick (1 s).
+Las capturas son para revisión local: **no** las subas al repo ni las enseñes en docs
+públicas si contienen widgets personales (§2).
 
 ---
 
-## 14. Gotchas (lista viva)
+## 15. Gotchas (lista viva)
 
 | Síntoma | Causa / arreglo |
 |---|---|
 | Rectángulo negro al cambiar de espacio | ventana transparente visible al hacer snapshot → `orderOut` en reposo |
 | El panel no encoge | `NSHostingView.sizingOptions` derivando tamaño mínimo → `[]` |
 | La apertura “no es uniforme” | contenido refloweando dentro del frame animado → tamaño fijo + máscara + fade al final |
-| Se ve el contenido antes que la silueta | falta el delado del fade o el frame final no está puesto antes de cambiar el estado |
+| Se ve el contenido antes que la silueta | falta el delay del fade o el frame final no está puesto antes de cambiar el estado |
 | Doble instancia / captura vieja | `pkill` con KeepAlive → `launchctl bootout` antes de probar `dist/` |
 | El icono de menú no desaparece | el setting se escribió fuera de `settings` en el JSON |
 | `entry` rechazado estando dentro | comparación de paths con `/var` vs `/private/var` → `PathContainment` por componentes |
 | Widget de disco no se actualiza | no subiste `version` en su manifest |
 | Cambio de idioma no llega a widgets | `setLanguage` debe remontar; no basta con asignar |
 | Prompt del Llavero en cada build | firma ad-hoc → secretos en archivo 0600, no Keychain |
-| LAN inaccesible | falta `NSLocalNetworkUsageDescription` / `NSAllowsLocalNetworking`; o no estás en la tailnet |
-| La página web se queda con el ancho viejo | devolver el `WKWebView` directo a SwiftUI no reflowea al redimensionar → contenedor con Auto Layout en `WebWidgetView` |
-| Cambias un HTML y no se ve | no subiste `version` en el manifest; el instalador solo actualiza versiones mayores |
+| LAN inaccesible | falta `NSLocalNetworkUsageDescription` / `NSAllowsLocalNetworking`, o no estás en la VPN |
+| La página web se queda con el ancho viejo | devolver el `WKWebView` directo a SwiftUI no reflowea → contenedor con Auto Layout |
+| El swipe va al revés | doble inversión de `scrollingDeltaX`: el offset usa el mismo signo que el delta |
+| Cambias un HTML y no se ve | no subiste `version` en el manifest |
 
 ---
 
-## 15. Añadir un widget (checklist)
+## 16. Añadir un widget
 
 1. Crea `BundledWidgets/<Nombre>.cornicewidget/{manifest.json,index.html}`.
 2. `id` reverse-DNS único; `apiVersion: 1`; `version` semver.
 3. Declara solo las capacidades que uses, con sus listas (`networkHosts`,
    `keychainServices`, `credentials`).
-4. Si es first-party y debe venir activo: `defaultEnabled: true`.
+4. Si debe venir activo: `defaultEnabled: true`.
 5. Usa `cornice.settings` para opciones y `cornice.language` para textos.
 6. No metas el contenido en una tarjeta: el fondo es el panel.
 7. Sube la versión si ya existía.
-8. `swift test` (el test de bundles lo carga) y captura con `scripts/screenshot.sh`.
-9. Actualiza `README.md` (sección del widget) y, si cambia el contrato, este archivo.
+8. `swift test` (el test de bundles lo carga) y captura local con `scripts/screenshot.sh`.
+9. **No** lo documentes en `README.md` si es personal (§2). Si es genérico, añade una sección
+   y actualiza este archivo si cambia el contrato.
 
 ---
 
-## 16. Convenciones
+## 17. Convenciones
 
 - **Commits**: conventional commits (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`,
-  `chore:`). Rama `main` mientras no haya remoto; si el repo crece, `feature/<nombre>`.
+  `chore:`), sin nombres, hosts ni datos de widgets personales. Rama `main` mientras no haya
+  remoto; si el repo crece, `feature/<nombre>`.
 - **Código y UI en inglés**; documentación de trabajo (este archivo) y conversación en español.
 - Swift 6 estricto: `@MainActor` en todo lo que toca UI/AppKit; lógica pura separada y
   testeada. Nada de `@unchecked Sendable` salvo justificación.
@@ -440,12 +466,11 @@ al primer tick (1 s).
 
 ---
 
-## 17. Roadmap / pendientes
+## 18. Roadmap / pendientes
 
-- UI de credenciales para pegar la API key sin depender del archivo legacy.
+- UI de credenciales para pegar tokens sin depender de migraciones legacy.
 - Bundles **nativos** Swift con firma (hoy solo HTML/JS).
 - Fila que rodea la cámara (estilo Droppy) y composiciones solo/pareado.
-- Más widgets del homelab: acestream (usa credencial por header), servicios `example.com`,
-  F1, Home Assistant.
-- Swipe entre páginas ya existe; valorar transición animada entre páginas.
-- `speedtest`, `loadAvg` y `uptime` del dashboard aún no se muestran (no caben en 3×3).
+- Contrato de **acciones** en el SDK (hacer, no solo mostrar) con capacidades.
+- Tooling de autoría: `cornice new` / `cornice dev` con recarga en caliente.
+- Más integraciones de infraestructura (servicios self-hosted, CI/PRs, contenedores, red).
