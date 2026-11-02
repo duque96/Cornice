@@ -54,7 +54,7 @@ final class CapabilityTests: XCTestCase {
 
         XCTAssertTrue(HostPolicy.isAllowed("example.com", in: allowed))
         XCTAssertTrue(HostPolicy.isAllowed("api.example.com", in: allowed))
-        XCTAssertTrue(HostPolicy.isAllowed("OPENCODE.AI", in: allowed))
+        XCTAssertTrue(HostPolicy.isAllowed("EXAMPLE.COM", in: allowed))
     }
 
     func testPolicyRejectsLookalikesAndOthers() {
@@ -62,7 +62,7 @@ final class CapabilityTests: XCTestCase {
 
         XCTAssertFalse(HostPolicy.isAllowed("evilexample.com", in: allowed))
         XCTAssertFalse(HostPolicy.isAllowed("example.com.evil.com", in: allowed))
-        XCTAssertFalse(HostPolicy.isAllowed("example.com", in: allowed))
+        XCTAssertFalse(HostPolicy.isAllowed("other.test", in: allowed))
     }
 
     func testRateLimiterBlocksOverTheLimit() {
@@ -79,26 +79,26 @@ final class CapabilityTests: XCTestCase {
 
     func testScopedSecretsOnlyAnswersForDeclaredServices() {
         let fake = FakeSecrets(values: [
-            "com.duque.cornice/opencode-api-key": "secret",
+            "com.example.vault/service-token": "secret",
             "other.app/api-key": "nope",
         ])
-        let scoped = ScopedSecrets(base: fake, allowedServices: ["com.duque.cornice"])
+        let scoped = ScopedSecrets(base: fake, allowedServices: ["com.example.vault"])
 
-        XCTAssertEqual(scoped.secret(service: "com.duque.cornice", account: "opencode-api-key"), "secret")
+        XCTAssertEqual(scoped.secret(service: "com.example.vault", account: "service-token"), "secret")
         XCTAssertNil(scoped.secret(service: "other.app", account: "api-key"))
     }
 
     // MARK: - Credential injection
 
     private func credentialSource(secret: String? = "sk-test") -> CredentialSource {
-        let keychain = FakeSecrets(values: secret.map { ["com.duque.cornice/opencode-api-key": $0] } ?? [:])
+        let keychain = FakeSecrets(values: secret.map { ["com.example.vault/service-token": $0] } ?? [:])
         return CredentialSource(
             rule: CredentialRule(
                 host: "example.com",
                 header: "Authorization",
                 prefix: "Bearer ",
-                service: "com.duque.cornice",
-                account: "opencode-api-key"
+                service: "com.example.vault",
+                account: "service-token"
             ),
             secrets: keychain
         )
@@ -117,7 +117,7 @@ final class CapabilityTests: XCTestCase {
     }
 
     func testCredentialsNeverLeaveTheDeclaredHost() {
-        let headers = CredentialInjector.apply([:], host: "example.com", sources: [credentialSource()])
+        let headers = CredentialInjector.apply([:], host: "other.test", sources: [credentialSource()])
 
         XCTAssertTrue(headers.isEmpty)
     }

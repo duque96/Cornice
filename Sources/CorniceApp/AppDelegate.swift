@@ -33,9 +33,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.start()
         self.controller = controller
 
-        // Import the legacy plain-text key once, so widgets only need the Keychain.
-        LegacyCredentials.migrateLegacyKeyIfNeeded()
-
         // Widgets shipped inside the app land in Application Support on first run.
         if let bundled = WidgetInstaller.bundledWidgetsURL {
             WidgetInstaller.installBundledWidgets(from: bundled, into: WidgetPaths.widgetsDirectory)

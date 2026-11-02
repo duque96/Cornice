@@ -5,9 +5,8 @@ import CorniceKit
 ///
 /// It replaces the Keychain on purpose: ad-hoc signed builds change their code
 /// signature on every rebuild, which makes macOS re-prompt for access to Keychain
-/// items. A 0600 file has the same threat model as the plain file this app already
-/// imported (`~/.config/example-usage/key`) and keeps the widget sandbox intact:
-/// only the host reads it.
+/// items. A 0600 file keeps the widget sandbox intact: only the host reads it, and
+/// secrets are injected into requests instead of being handed to widgets.
 public struct FileSecretStore: SecretAccessing {
     public let root: URL
 
