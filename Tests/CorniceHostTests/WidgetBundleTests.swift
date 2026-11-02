@@ -154,28 +154,6 @@ final class WidgetBundleTests: XCTestCase {
         XCTAssertFalse(reloaded.isEnabled("com.example.status", builtIn: false, defaultEnabled: true))
     }
 
-    func testBundledExampleWidgetIsValid() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let bundle = root.appendingPathComponent("BundledWidgets/ExampleWidget.cornicewidget")
-
-        let widget = try WidgetBundleStore.load(bundleAt: bundle)
-
-        XCTAssertEqual(widget.manifest.id, "com.example.status")
-        XCTAssertTrue(widget.defaultEnabled)
-        XCTAssertEqual(widget.manifest.capabilities, [.network, .keychain])
-        XCTAssertEqual(widget.manifest.networkHosts, ["example.com"])
-        XCTAssertEqual(widget.manifest.credentials.count, 1)
-
-        let credential = try XCTUnwrap(widget.manifest.credentials.first)
-        XCTAssertEqual(credential.host, "example.com")
-        XCTAssertEqual(credential.header, "Authorization")
-        XCTAssertEqual(credential.prefix, "Bearer ")
-        XCTAssertEqual(credential.service, "com.duque.cornice")
-    }
-
     // MARK: - Bundled installation
 
     func testInstallerCopiesBundlesOnFirstRun() throws {
@@ -347,7 +325,7 @@ final class WidgetBundleTests: XCTestCase {
             includingPropertiesForKeys: nil
         ).filter { $0.pathExtension == WidgetBundleStore.bundleExtension }
 
-        XCTAssertGreaterThanOrEqual(bundles.count, 3)
+        XCTAssertGreaterThanOrEqual(bundles.count, 1)
 
         for bundle in bundles {
             _ = try WidgetBundleStore.load(bundleAt: bundle)

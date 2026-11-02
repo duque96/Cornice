@@ -20,7 +20,7 @@ desde disco, declaran capacidades y nunca tocan el sistema directamente.
 - **Host**: `CorniceHost` — montaje, reloj, capacidades, secretos, loader de disco, UI de ajustes.
 - **Core**: `CorniceCore` — panel, geometría, animación, ajustes, localización.
 
-Estado: M11. 91 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
+Estado: M11. 90 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
 App Store.
 
 > Si una tarea toca el homelab, aplica también `~/.config/opencode/AGENTS.md` y el repo
@@ -52,7 +52,7 @@ Sources/
   CorniceCore/       panel, geometría, estado, ajustes, shell de Opciones
   CorniceHost/       host de widgets, loader de disco, sandbox web, UI de widgets
   CorniceApp/        @main, AppDelegate, composición de secciones
-BundledWidgets/      bundles que viajan dentro de la app (contenido personal; ver §2)
+BundledWidgets/      solo el widget de ejemplo genérico
 Tests/
   CorniceCoreTests/  geometría, máquina de estados, ajustes, pager
   CorniceKitTests/   contrato de manifiesto, HTTP
@@ -84,7 +84,7 @@ Widgets de disco → solo ven el bridge JS, nunca Swift
 
 ```bash
 swift build                      # debug
-swift test                       # 91 tests
+swift test                       # 90 tests
 ./build-app.sh                   # release + dist/Cornice.app (copia BundledWidgets a Resources)
 ./install.sh                     # ~/Applications + LaunchAgent (arranque al login)
 ./uninstall.sh                   # quita app y agente; conserva datos
@@ -335,9 +335,10 @@ nunca se pisan carpetas del usuario).
 
 ## 10. Widgets incluidos
 
-Los bundles de `BundledWidgets/` son **personales**: no se documentan aquí ni en el README
-(§2). Su manifest es la fuente de verdad. Si trabajas en uno, no publiques sus endpoints,
-IDs, credenciales ni capturas.
+`BundledWidgets/` contiene **solo un widget de ejemplo genérico** (Clock). Los widgets
+personales viven fuera del repo, en `/Volumes/Externo/Proyectos/CorniceWidgets/`, y se
+instalan a mano en `~/Library/Application Support/Cornice/Widgets/`. No los traigas al repo
+ni los documentes (§2).
 
 El host ignora manifests con `problems`; el test `testEveryBundledWidgetLoads` recorre la
 carpeta y falla si alguno es inválido.
@@ -377,7 +378,7 @@ Hay un migrador de credenciales legacy en el host; no documentes de dónde lee.
 swift test
 ```
 
-91 tests. Cobertura por área:
+90 tests. Cobertura por área:
 
 - Geometría del notch y zonas (puro).
 - Máquina de estados del hover.
@@ -437,7 +438,8 @@ públicas si contienen widgets personales (§2).
 
 ## 16. Añadir un widget
 
-1. Crea `BundledWidgets/<Nombre>.cornicewidget/{manifest.json,index.html}`.
+1. Para un ejemplo genérico: `BundledWidgets/<Nombre>.cornicewidget/`. Para uno personal:
+   fuera del repo, en `/Volumes/Externo/Proyectos/CorniceWidgets/`.
 2. `id` reverse-DNS único; `apiVersion: 1`; `version` semver.
 3. Declara solo las capacidades que uses, con sus listas (`networkHosts`,
    `keychainServices`, `credentials`).

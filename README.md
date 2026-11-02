@@ -212,7 +212,7 @@ Sources/
   CorniceKit/       # public SDK: manifests, capabilities, settings, CorniceWidget
   CorniceHost/      # mounting, clock, capabilities, disk loader, web sandbox, settings UI
   CorniceApp/       # @main, composition root, sidebar sections
-BundledWidgets/     # optional bundles shipped with the app
+BundledWidgets/     # one generic example widget
 Tests/
 ```
 
@@ -235,7 +235,7 @@ swift test
 
 Geometry, hover state machine, interactive pager, settings clamping/migration, grid and pages,
 ordering, resizing, disk loader, installer upgrades, capability enforcement, HTTP, manifest
-contract, localization and a load test for every bundled widget.
+contract, localization and a load test for the bundled example widget.
 
 Snapshot helpers render the surface, a filmstrip of the transition and the options form to
 `$CORNICE_SNAPSHOT_DIR`:
