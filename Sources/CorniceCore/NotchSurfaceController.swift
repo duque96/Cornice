@@ -43,6 +43,7 @@ public final class NotchSurfaceController {
     /// Pinned surfaces ignore hover: used by the options window to preview changes.
     private var isPinned = false
     private var settleTask: Task<Void, Never>?
+    private var wheel = WheelPagingState()
 
     public init(
         settings: SettingsStore,
@@ -390,6 +391,25 @@ public final class NotchSurfaceController {
 
         let width = model.expandedSize.width - 40
 
+        // Mice report no phase and often several events per notch, so the drag
+        // model does not fit: accumulate the dominant axis and page in steps.
+        if event.phase.isEmpty && event.momentumPhase.isEmpty {
+            let dx = event.scrollingDeltaX
+            let dy = event.scrollingDeltaY
+            let delta = abs(dx) > abs(dy) ? dx : dy
+
+            guard delta != 0,
+                  let step = wheel.step(
+                      delta: delta,
+                      precise: event.hasPreciseScrollingDeltas,
+                      at: event.timestamp
+                  )
+            else { return }
+
+            page(by: step)
+            return
+        }
+
         switch event.momentumPhase {
         case .ended:
             settlePaging(width: width)
@@ -421,10 +441,20 @@ public final class NotchSurfaceController {
         // A leftward swipe reports a negative deltaX; the offset uses the same sign
         // (negative = page moves left), so pass it through unchanged.
         pager.drag(by: event.scrollingDeltaX, limit: width)
+    }
 
-        // A mouse wheel never reports a phase: settle when it stops.
-        if event.phase == .none && event.momentumPhase == .none {
-            scheduleSettling(width: width, after: 0.16)
+    private func page(by step: Int) {
+        settleTask?.cancel()
+        pager.beginDrag()
+
+        withAnimation(.spring(response: 0.30, dampingFraction: 0.9)) {
+            pager.commit(step: step)
+        }
+
+        settleTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(380))
+            guard let self, !Task.isCancelled else { return }
+            self.pager.endInteraction()
         }
     }
 

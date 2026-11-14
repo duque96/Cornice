@@ -138,7 +138,8 @@ Six-column grid: `placement.columns` is a span (1–6) and `placement.rows` sets
 when a row does not fit; dots appear at the bottom.
 
 The page follows a horizontal trackpad drag — the next page slides in as you swipe — and
-settles on release with a spring. Dots are clickable too.
+settles on release with a spring. With a mouse, one wheel notch (or a tilt of the side
+wheel) moves exactly one page. Dots are clickable too.
 
 ```
 ┌─────────────┬─────────────┐

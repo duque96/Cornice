@@ -20,7 +20,7 @@ desde disco, declaran capacidades y nunca tocan el sistema directamente.
 - **Host**: `CorniceHost` — montaje, reloj, capacidades, secretos, loader de disco, UI de ajustes.
 - **Core**: `CorniceCore` — panel, geometría, animación, ajustes, localización.
 
-Estado: M11. 108 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
+Estado: M11. 114 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
 App Store.
 
 > Si una tarea toca el homelab, aplica también `~/.config/opencode/AGENTS.md` y el repo
@@ -159,7 +159,12 @@ Reglas que no hay que romper:
 - Al soltar, spring: si `|offset| > max(40, 22 % del ancho)` avanza; si no, vuelve.
   `isDragging` se mantiene 380 ms para que la animación termine.
 - Momentum: se espera a `momentumPhase == .ended`; fallback de 0,18 s al levantar el dedo.
-  Rueda de ratón (sin fases): debounce de 0,16 s.
+- **Rueda de ratón** (sin fase ni momentum): no usa el modelo de arrastre. Se acumula el
+  delta del eje dominante (`WheelPagingState`: 10 pt por línea, umbral 20 pt) y cada notch
+  avanza **una** página, con 0,30 s de enfriamiento y reset tras 0,40 s de inactividad.
+  Así una rueda lenta no se queda a medias y una rápida no salta tres páginas.
+  Ojo: `NSEvent.Phase` es un `OptionSet`; `phase == .none` compara con `Optional.none` y
+  **siempre es false**. Usa `phase.isEmpty`.
 
 ### Alto automático
 
@@ -421,11 +426,12 @@ Hay un migrador de credenciales legacy en el host; no documentes de dónde lee.
 swift test
 ```
 
-108 tests. Cobertura por área:
+114 tests. Cobertura por área:
 
 - Geometría del notch y zonas (puro).
 - Máquina de estados del hover.
 - Pager: arrastre, rubber-band en los extremos, commit/cancel.
+- Rueda: acumulación por notch, dirección, enfriamiento y reset por inactividad.
 - Ajustes: clamp, round-trip, archivo corrupto, claves ausentes.
 - Grid: filas, páginas, prioridad, límites.
 - Orden y tamaños: `WidgetOrdering`, `WidgetResize`, persistencia.
@@ -485,6 +491,8 @@ públicas si contienen widgets personales (§2).
 | Un bundle se rechaza por “link or special file” | contiene un symlink; WebKit tendría lectura fuera del bundle |
 | Tailscale deja de responder tras mover el binario | solo se ejecutan binarios root/usuario sin escritura de grupo; revisa owner y permisos |
 | El swipe va al revés | doble inversión de `scrollingDeltaX`: el offset usa el mismo signo que el delta |
+| La rueda del ratón no pagina | `phase == .none` siempre es false (OptionSet vs Optional); usa `phase.isEmpty` |
+| La rueda salta varias páginas | el ratón emite varios eventos por notch: acumula y aplica `WheelPagingState` |
 | Cambias un HTML y no se ve | no subiste `version` en el manifest |
 | Un widget no hereda los tamaños | usa `var(--cornice-*)`; los tokens se inyectan en `:root` antes del HTML |
 

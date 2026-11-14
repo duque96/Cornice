@@ -19,7 +19,7 @@ public struct WidgetAreaView: View {
         GeometryReader { proxy in
             let pages = makePages(in: proxy.size)
             let index = min(pager.index, max(0, pages.count - 1))
-            let pageHeight = max(0, proxy.size.height - (pages.count > 1 ? 14 : 0))
+            let pageHeight = max(0, proxy.size.height - (pages.count > 1 ? 18 : 0))
             let width = proxy.size.width
 
             VStack(spacing: 6) {
@@ -74,7 +74,7 @@ public struct WidgetAreaView: View {
 
         return WidgetGridLayout.layout(
             widgets: widgets,
-            available: CGSize(width: size.width, height: max(0, size.height - 14)),
+            available: CGSize(width: size.width, height: max(0, size.height - 18)),
             scale: scale
         )
     }
@@ -109,13 +109,16 @@ public struct WidgetAreaView: View {
                         pager.select(index)
                     }
                 } label: {
+                    // 4 pt dot with a 14x12 hit target: a mouse needs something to aim at.
                     Circle()
                         .fill(Color.white.opacity(index == selection ? 0.7 : 0.22))
                         .frame(width: 4, height: 4)
+                        .frame(width: 14, height: 12)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
         }
-        .frame(height: 10)
+        .frame(height: 12)
     }
 }
