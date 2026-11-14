@@ -19,8 +19,13 @@ public struct WidgetAreaView: View {
         GeometryReader { proxy in
             let pages = makePages(in: proxy.size)
             let index = min(pager.index, max(0, pages.count - 1))
-            let pageHeight = max(0, proxy.size.height - (pages.count > 1 ? 18 : 0))
             let width = proxy.size.width
+            let pageHeight = max(0, proxy.size.height - (pages.count > 1 ? 18 : 0))
+
+            // The pill follows the gesture as soon as it would commit, instead of
+            // waiting for the page to settle after momentum.
+            let step = pager.isDragging ? (pager.pendingStep(limit: width) ?? 0) : 0
+            let dotIndex = min(max(0, index + step), max(0, pages.count - 1))
 
             VStack(spacing: 6) {
                 ZStack(alignment: .topLeading) {
@@ -40,7 +45,7 @@ public struct WidgetAreaView: View {
                 .clipped()
 
                 if pages.count > 1 {
-                    dots(count: pages.count, selection: index)
+                    dots(count: pages.count, selection: dotIndex)
                 }
             }
             .onAppear { pager.setPageCount(pages.count) }
@@ -127,5 +132,6 @@ public struct WidgetAreaView: View {
             }
         }
         .frame(height: 12)
+        .animation(.easeOut(duration: 0.16), value: selection)
     }
 }
