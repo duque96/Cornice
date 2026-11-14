@@ -80,20 +80,37 @@ public actor WidgetHTTPClient: HTTPClient {
     private let credentials: [CredentialSource]
     private let log: WidgetLog
     private let session: URLSession
+    private let redirectGuard: WidgetRedirectGuard
     private var limiter: RateLimiter
 
     public init(
         allowedHosts: Set<String>,
         credentials: [CredentialSource] = [],
         requestsPerMinute: Int = 30,
-        log: WidgetLog,
-        session: URLSession = .shared
+        log: WidgetLog
     ) {
         self.allowedHosts = allowedHosts
         self.credentials = credentials
         self.log = log
-        self.session = session
         self.limiter = RateLimiter(limit: requestsPerMinute, window: 60)
+
+        let redirectGuard = WidgetRedirectGuard(
+            allowedHosts: allowedHosts,
+            credentialHeaders: Set(credentials.map(\.rule.header)),
+            log: log
+        )
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+
+        self.redirectGuard = redirectGuard
+        self.session = URLSession(
+            configuration: configuration,
+            delegate: redirectGuard,
+            delegateQueue: nil
+        )
     }
 
     public func send(_ request: HTTPRequest) async throws -> HTTPResponse {
@@ -122,6 +139,10 @@ public actor WidgetHTTPClient: HTTPClient {
             let (data, response) = try await session.data(for: urlRequest)
             guard let http = response as? HTTPURLResponse else {
                 throw HTTPError.transport("Invalid response")
+            }
+            // A 3xx here means the redirect guard cancelled the hop.
+            guard !(300..<400).contains(http.statusCode) else {
+                throw HTTPError.transport("Redirect blocked")
             }
             return HTTPResponse(status: http.statusCode, body: data)
         } catch let error as HTTPError {

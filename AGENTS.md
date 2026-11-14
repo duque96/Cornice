@@ -306,7 +306,21 @@ bundle (componentes de ruta, no `hasPrefix`; ojo `/var` vs `/private/var`) y exi
 ### Sandbox web
 
 `WKWebView` con `websiteDataStore = .nonPersistent()`, navegación confinada al bundle,
-sin Keychain, sin archivos, sin `URLSession`. Puente:
+sin Keychain, sin archivos, sin `URLSession`.
+
+**Lockdown de red**: `WidgetContentRules` compila un `WKContentRuleList` que bloquea
+`^https?://`, `^wss?://` y `^ftp://`. Sin él, la página podría usar `fetch`, `<img>` o
+`<script src>` contra cualquier host y saltarse las capacidades (incluido exfiltrar settings
+o cargar código remoto con acceso al bridge). Si la compilación falla, el widget **no se
+carga** (fail closed). `cornice.fetch` es nativo y no pasa por WebKit, así que sigue
+funcionando.
+
+**Redirecciones**: `WidgetRedirectGuard` (delegate de `URLSession`) cancela cualquier
+redirección a un host fuera de la allow-list y, si cambia de host, elimina las cabeceras de
+credenciales y cookies. El cliente usa una sesión `ephemeral` sin cookies ni caché; un 3xx
+que llegue a `send` se trata como error.
+
+Puente:
 
 ```js
 await cornice.fetch(url, { method, headers }); // { status, text }
@@ -389,6 +403,7 @@ swift test
 - Loader de disco: válido, apiVersion, capacidad desconocida, traversal, entry ausente.
 - Instalador: copia, upgrade por versión, no pisar misma versión.
 - Capabilities: allow-list, rate limit, scope de secretos, inyección de credenciales.
+- Seguridad web: reglas de red (JSON) y política de redirecciones (host y cabeceras).
 - Contrato de manifiesto y `HTTPResponse`.
 - Bundled widgets: todos cargan.
 - Idioma: translator, persistencia, remontaje.
@@ -431,6 +446,8 @@ públicas si contienen widgets personales (§2).
 | Prompt del Llavero en cada build | firma ad-hoc → secretos en archivo 0600, no Keychain |
 | LAN inaccesible | falta `NSLocalNetworkUsageDescription` / `NSAllowsLocalNetworking`, o no estás en la VPN |
 | La página web se queda con el ancho viejo | devolver el `WKWebView` directo a SwiftUI no reflowea → contenedor con Auto Layout |
+| Un widget no carga y el log dice “content rules unavailable” | falló la compilación del `WKContentRuleList`; se falla cerrado a propósito |
+| Un widget intenta `fetch()` directo y no funciona | correcto: solo `cornice.fetch`; el resto lo bloquea el content rule list |
 | El swipe va al revés | doble inversión de `scrollingDeltaX`: el offset usa el mismo signo que el delta |
 | Cambias un HTML y no se ve | no subiste `version` en el manifest |
 

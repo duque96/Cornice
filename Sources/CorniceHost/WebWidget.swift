@@ -110,7 +110,18 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         webView.underPageBackgroundColor = .clear
         webView.setValue(false, forKey: "drawsBackground")
         log.warn("settings \(context.settings.values)")
-        webView.loadFileURL(bundle.entry, allowingReadAccessTo: bundle.directory)
+
+        // Fail closed: no network lockdown, no page.
+        WidgetContentRules.prepare { [weak self, controller] rules in
+            guard let self else { return }
+            guard let rules else {
+                self.log.warn("content rules unavailable; widget not loaded")
+                return
+            }
+
+            controller.add(rules)
+            self.webView.loadFileURL(self.bundle.entry, allowingReadAccessTo: self.bundle.directory)
+        }
     }
 
     func sendTick(_ date: Date) {
@@ -157,6 +168,7 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         didReceive message: WKScriptMessage
     ) {
         guard message.name == "cornice",
+              message.frameInfo.isMainFrame,
               let body = message.body as? [String: Any],
               let id = body["id"] as? Int,
               let method = body["method"] as? String

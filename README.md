@@ -106,8 +106,10 @@ the app are installed on first run and replaced only when their version increase
 folders are never overwritten.
 
 They run in a `WKWebView` with a non-persistent data store, no file access, no Keychain, no
-`URLSession`, and navigation confined to the bundle. The only way out is `cornice.fetch`,
-which goes through the host allow-list and rate limit.
+`URLSession`, and navigation confined to the bundle. A WebKit content-rule list blocks every
+network load the page tries on its own (`http(s)`, `ws(s)`, `ftp`), so `window.fetch`,
+`<img>` or a remote `<script>` cannot reach anything: the only way out is `cornice.fetch`,
+which goes through the host allow-list, rate limit and credential injection.
 
 ## Layout
 
