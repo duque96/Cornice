@@ -67,3 +67,46 @@ final class WidgetContentRulesTests: XCTestCase {
         XCTAssertTrue(actions.allSatisfy { $0["type"] as? String == "block" })
     }
 }
+
+
+private final class HugeBodyProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 200,
+            httpVersion: "HTTP/1.1",
+            headerFields: ["Content-Length": "50000"]
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(repeating: 65, count: 50_000))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
+final class WidgetHTTPClientTests: XCTestCase {
+    func testRejectsOversizedResponses() async {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [HugeBodyProtocol.self]
+
+        let client = WidgetHTTPClient(
+            allowedHosts: ["example.com"],
+            log: WidgetLog(subsystem: "test"),
+            maxResponseBytes: 1_000,
+            session: URLSession(configuration: configuration)
+        )
+
+        do {
+            _ = try await client.send(HTTPRequest(url: URL(string: "https://example.com/big")!))
+            XCTFail("Expected responseTooLarge")
+        } catch let error as HTTPError {
+            XCTAssertEqual(error, .responseTooLarge)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+}

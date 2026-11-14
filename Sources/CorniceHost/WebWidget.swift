@@ -109,7 +109,7 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         webView.navigationDelegate = self
         webView.underPageBackgroundColor = .clear
         webView.setValue(false, forKey: "drawsBackground")
-        log.warn("settings \(context.settings.values)")
+        log.warn("settings keys \(context.settings.values.keys.sorted())")
 
         // Fail closed: no network lockdown, no page.
         WidgetContentRules.prepare { [weak self, controller] rules in

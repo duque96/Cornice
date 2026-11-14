@@ -156,12 +156,18 @@ public enum WidgetBundleStore {
 
         var widgets: [DiskWidget] = []
         var errors: [String] = []
+        var seenIDs = Set<WidgetID>()
 
         for url in contents.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
             guard url.pathExtension == bundleExtension else { continue }
 
             do {
-                widgets.append(try load(bundleAt: url))
+                let widget = try load(bundleAt: url)
+                guard seenIDs.insert(widget.manifest.id).inserted else {
+                    errors.append("\(url.lastPathComponent): duplicated id '\(widget.manifest.id)', ignoring")
+                    continue
+                }
+                widgets.append(widget)
             } catch {
                 errors.append("\(url.lastPathComponent): \(error.localizedDescription)")
             }

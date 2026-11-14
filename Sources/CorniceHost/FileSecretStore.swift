@@ -34,7 +34,16 @@ public struct FileSecretStore: SecretAccessing {
             withIntermediateDirectories: true,
             attributes: [.posixPermissions: 0o700]
         )
-        try Data(value.utf8).write(to: url, options: .atomic)
+
+        // Create with 0600 from the start; chmod-after-write leaves a window.
+        let created = FileManager.default.createFile(
+            atPath: url.path,
+            contents: Data(value.utf8),
+            attributes: [.posixPermissions: 0o600]
+        )
+        guard created else {
+            throw CocoaError(.fileWriteUnknown)
+        }
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 

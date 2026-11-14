@@ -20,7 +20,7 @@ desde disco, declaran capacidades y nunca tocan el sistema directamente.
 - **Host**: `CorniceHost` — montaje, reloj, capacidades, secretos, loader de disco, UI de ajustes.
 - **Core**: `CorniceCore` — panel, geometría, animación, ajustes, localización.
 
-Estado: M11. 90 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
+Estado: M11. 98 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
 App Store.
 
 > Si una tarea toca el homelab, aplica también `~/.config/opencode/AGENTS.md` y el repo
@@ -84,7 +84,7 @@ Widgets de disco → solo ven el bridge JS, nunca Swift
 
 ```bash
 swift build                      # debug
-swift test                       # 90 tests
+swift test                       # 98 tests
 ./build-app.sh                   # release + dist/Cornice.app (copia BundledWidgets a Resources)
 ./install.sh                     # ~/Applications + LaunchAgent (arranque al login)
 ./uninstall.sh                   # quita app y agente; conserva datos
@@ -231,10 +231,12 @@ WidgetManifest(id:name:version:apiVersion:capabilities:networkHosts:keychainServ
 - `apiVersion` debe ser `1`; el host rechaza manifests con `problems`.
 - `Capability`: `.network`, `.keychain`, `.files`, `.calendar`, `.media`, `.notifications`,
   `.tailscale`. **Solo se aplican network, keychain y tailscale.**
-- `.network` exige `networkHosts` (hosts o IPs; acepta subdominios).
+- `.network` exige `networkHosts` (hosts o IPs; acepta subdominios). Respuestas limitadas a
+  2 MB (`maxResponseBytes`) y leídas en streaming.
 - `.keychain` exige `keychainServices`; el host entrega `ScopedSecrets`.
-- `credentials`: el host inyecta el header (p. ej. `Authorization: Bearer …`) por host.
-  El secreto **nunca** llega al widget.
+- `credentials`: el host inyecta el header (p. ej. `Authorization: Bearer …`) solo para el
+  **host exacto** de la regla: un subdominio no hereda la credencial. El secreto **nunca**
+  llega al widget.
 - `settings`: campos declarativos (`toggle`, `number` con min/max, `text`, `select`).
   El host renderiza el formulario, valida/clampa y remonta el widget al cambiar.
 - `.tailscale`: `WidgetContext.tailscale` + `cornice.tailscale.status()` /
@@ -256,6 +258,10 @@ WidgetManifest(id:name:version:apiVersion:capabilities:networkHosts:keychainServ
 - Un **único ticker de 1 s** y **solo** con la superficie abierta (`setActive`).
 - `setEnabled`, `move(before:)`, `setSize`, `persistSize`, `resetSizes`, `reload`.
 - `setLanguage` **remonta** los widgets para que el web reciba el nuevo `cornice.language`.
+- Los bundles de disco con `id` duplicado se rechazan (gana el primero por orden
+  alfabético; el segundo aparece en `discoveryErrors`).
+- Las redirecciones pasan por `WidgetRedirectGuard`: host fuera de la allow-list → cancelada;
+  cambio de host → se quitan credenciales y cookies.
 - Preferencias en `widgets.json`:
   `enabledDiskWidgets`, `disabledDiskWidgets` (los de disco empiezan off salvo
   `defaultEnabled`), `disabledBuiltIns`, `order`, `sizes`.
@@ -362,7 +368,8 @@ carpeta y falla si alguno es inválido.
 ## 11. Secretos
 
 `FileSecretStore`: un archivo por `service/account` bajo
-`~/Library/Application Support/Cornice/secrets/`, permisos `0600`.
+`~/Library/Application Support/Cornice/secrets/`, creado con `0600` desde el inicio y en
+directorios `0700`.
 
 **Por qué no el Llavero**: las builds ad-hoc cambian de firma en cada rebuild y macOS
 vuelve a pedir permiso (llegó a bloquear el arranque). El modelo de amenaza es el mismo que
@@ -392,7 +399,7 @@ Hay un migrador de credenciales legacy en el host; no documentes de dónde lee.
 swift test
 ```
 
-90 tests. Cobertura por área:
+98 tests. Cobertura por área:
 
 - Geometría del notch y zonas (puro).
 - Máquina de estados del hover.
@@ -403,7 +410,9 @@ swift test
 - Loader de disco: válido, apiVersion, capacidad desconocida, traversal, entry ausente.
 - Instalador: copia, upgrade por versión, no pisar misma versión.
 - Capabilities: allow-list, rate limit, scope de secretos, inyección de credenciales.
-- Seguridad web: reglas de red (JSON) y política de redirecciones (host y cabeceras).
+- Seguridad web: reglas de red (JSON), política de redirecciones (host y cabeceras) y
+  límite de tamaño de respuesta.
+- Seguridad de rutas: claves de settings sin colisión y IDs duplicados rechazados.
 - Contrato de manifiesto y `HTTPResponse`.
 - Bundled widgets: todos cargan.
 - Idioma: translator, persistencia, remontaje.

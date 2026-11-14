@@ -110,10 +110,10 @@ final class CapabilityTests: XCTestCase {
         XCTAssertEqual(headers["Authorization"], "Bearer sk-test")
     }
 
-    func testCredentialsAreInjectedForSubdomains() {
+    func testCredentialsAreNotInjectedIntoSubdomains() {
         let headers = CredentialInjector.apply([:], host: "api.example.com", sources: [credentialSource()])
 
-        XCTAssertEqual(headers["Authorization"], "Bearer sk-test")
+        XCTAssertTrue(headers.isEmpty)
     }
 
     func testCredentialsNeverLeaveTheDeclaredHost() {

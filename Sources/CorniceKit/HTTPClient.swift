@@ -44,6 +44,7 @@ public protocol HTTPClient: Sendable {
 public enum HTTPError: LocalizedError, Equatable, Sendable {
     case hostNotAllowed(String)
     case rateLimited
+    case responseTooLarge
     case transport(String)
 
     public var errorDescription: String? {
@@ -52,6 +53,8 @@ public enum HTTPError: LocalizedError, Equatable, Sendable {
             return "Network access to \(host) is not allowed"
         case .rateLimited:
             return "Too many requests"
+        case .responseTooLarge:
+            return "Response too large"
         case .transport(let message):
             return message
         }

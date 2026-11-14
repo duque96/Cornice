@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Observation
 import CorniceKit
@@ -69,7 +70,25 @@ public final class WidgetSettingsStore {
         }
     }
 
+    /// Hash suffix so two IDs that sanitize to the same string cannot share a
+    /// folder (`a/b` vs `a_b`).
+    func storageKey(for widgetID: WidgetID) -> String {
+        let prefix = widgetID
+            .replacingOccurrences(of: "/", with: "_")
+            .prefix(32)
+        let digest = SHA256.hash(data: Data(widgetID.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+            .prefix(16)
+        return "\(prefix)-\(digest)"
+    }
+
     private func fileURL(_ widgetID: WidgetID) -> URL {
+        root.appendingPathComponent(storageKey(for: widgetID), isDirectory: true)
+            .appendingPathComponent("settings.json")
+    }
+
+    private func legacyFileURL(_ widgetID: WidgetID) -> URL {
         root.appendingPathComponent(sanitized(widgetID), isDirectory: true)
             .appendingPathComponent("settings.json")
     }
@@ -85,7 +104,18 @@ public final class WidgetSettingsStore {
     }
 
     private func load(_ widgetID: WidgetID) -> [String: SettingValue]? {
-        let url = fileURL(widgetID)
+        if let values = read(fileURL(widgetID)) {
+            return values
+        }
+
+        // Migrate the pre-hash folder once.
+        guard let values = read(legacyFileURL(widgetID)) else { return nil }
+        save(widgetID, values: values)
+        try? FileManager.default.removeItem(at: legacyFileURL(widgetID).deletingLastPathComponent())
+        return values
+    }
+
+    private func read(_ url: URL) -> [String: SettingValue]? {
         guard let data = FileManager.default.contents(atPath: url.path) else { return nil }
         return try? JSONDecoder().decode([String: SettingValue].self, from: data)
     }

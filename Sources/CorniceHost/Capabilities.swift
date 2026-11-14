@@ -54,7 +54,9 @@ public enum CredentialInjector {
     ) -> [String: String] {
         var result = headers
 
-        for source in sources where HostPolicy.isAllowed(host, in: [source.rule.host]) {
+        // Exact host: a credential for `example.com` must not travel to
+        // `tenant.example.com` (an attacker-controlled subdomain).
+        for source in sources where source.rule.host.caseInsensitiveCompare(host) == .orderedSame {
             guard result[source.rule.header] == nil,
                   let secret = source.secrets.secret(
                     service: source.rule.service,
@@ -81,17 +83,21 @@ public actor WidgetHTTPClient: HTTPClient {
     private let log: WidgetLog
     private let session: URLSession
     private let redirectGuard: WidgetRedirectGuard
+    private let maxResponseBytes: Int
     private var limiter: RateLimiter
 
     public init(
         allowedHosts: Set<String>,
         credentials: [CredentialSource] = [],
         requestsPerMinute: Int = 30,
-        log: WidgetLog
+        log: WidgetLog,
+        maxResponseBytes: Int = 2_000_000,
+        session: URLSession? = nil
     ) {
         self.allowedHosts = allowedHosts
         self.credentials = credentials
         self.log = log
+        self.maxResponseBytes = maxResponseBytes
         self.limiter = RateLimiter(limit: requestsPerMinute, window: 60)
 
         let redirectGuard = WidgetRedirectGuard(
@@ -106,7 +112,7 @@ public actor WidgetHTTPClient: HTTPClient {
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
 
         self.redirectGuard = redirectGuard
-        self.session = URLSession(
+        self.session = session ?? URLSession(
             configuration: configuration,
             delegate: redirectGuard,
             delegateQueue: nil
@@ -136,7 +142,7 @@ public actor WidgetHTTPClient: HTTPClient {
         }
 
         do {
-            let (data, response) = try await session.data(for: urlRequest)
+            let (bytes, response) = try await session.bytes(for: urlRequest)
             guard let http = response as? HTTPURLResponse else {
                 throw HTTPError.transport("Invalid response")
             }
@@ -144,6 +150,22 @@ public actor WidgetHTTPClient: HTTPClient {
             guard !(300..<400).contains(http.statusCode) else {
                 throw HTTPError.transport("Redirect blocked")
             }
+            guard http.expectedContentLength <= Int64(maxResponseBytes) else {
+                throw HTTPError.responseTooLarge
+            }
+
+            var data = Data()
+            if http.expectedContentLength > 0 {
+                data.reserveCapacity(min(maxResponseBytes, Int(http.expectedContentLength)))
+            }
+
+            for try await byte in bytes {
+                guard data.count < maxResponseBytes else {
+                    throw HTTPError.responseTooLarge
+                }
+                data.append(byte)
+            }
+
             return HTTPResponse(status: http.statusCode, body: data)
         } catch let error as HTTPError {
             throw error

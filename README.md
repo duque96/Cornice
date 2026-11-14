@@ -139,11 +139,15 @@ A widget declares what it needs; the host decides what it actually gets.
 |---|---|---|
 | `.network` | `WidgetContext.http` / `cornice.fetch` | host allow-list (`networkHosts`, exact host or subdomain) and 30 requests/minute |
 | `.keychain` | `WidgetContext.secrets` | scoped to `keychainServices`; other services return `nil` |
-| credentials | `Authorization` (or the declared header) | only for the declared host, service and account; the secret never reaches JS |
+| credentials | `Authorization` (or the declared header) | exact host only (subdomains do not inherit it), declared service and account; the secret never reaches JS |
 
 No capability means no object: `context.http` and `context.secrets` are `nil`, and the
 manifest is rejected at mount time if it declares a capability without its allow-list, if a
 credential points outside `keychainServices`, or to a host outside `networkHosts`.
+
+Responses are capped at 2 MB; redirects to hosts outside the allow-list are refused and
+cross-host redirects drop credential headers. Each widget gets an ephemeral session (no
+cookies, no cache).
 
 Privileged integrations (device or service control) are separate capabilities, each with a
 fixed command surface mediated by the host — never a shell.

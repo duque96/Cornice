@@ -331,4 +331,24 @@ final class WidgetBundleTests: XCTestCase {
             _ = try WidgetBundleStore.load(bundleAt: bundle)
         }
     }
+
+    // MARK: - Security regressions
+
+    func testDuplicateDiskIDsAreRejected() throws {
+        _ = try makeBundle(named: "First", manifest: manifest(id: "com.example.same"))
+        _ = try makeBundle(named: "Second", manifest: manifest(id: "com.example.same"))
+
+        let discovery = WidgetBundleStore.discover(in: root)
+
+        XCTAssertEqual(discovery.widgets.count, 1)
+        XCTAssertEqual(discovery.errors.count, 1)
+        XCTAssertTrue(discovery.errors[0].contains("duplicated"))
+    }
+
+    @MainActor
+    func testSettingsStorageKeysDoNotCollide() {
+        let store = WidgetSettingsStore(root: root.appendingPathComponent("settings"))
+
+        XCTAssertNotEqual(store.storageKey(for: "a/b"), store.storageKey(for: "a_b"))
+    }
 }
