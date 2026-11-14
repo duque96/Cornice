@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import CorniceKit
 
@@ -5,10 +6,12 @@ import CorniceKit
 ///
 /// Only `status`, `up` and `down` are exposed: no arbitrary shell.
 public struct SystemTailscale: TailscaleControlling {
-    private let binary: URL?
+    /// Injected executable (tests). When nil the CLI is located on every call, so
+    /// a binary installed after launch is picked up instead of caching the miss.
+    private let explicitBinary: URL?
 
-    public init(binary: URL? = SystemTailscale.locateBinary()) {
-        self.binary = binary
+    public init(binary: URL? = nil) {
+        self.explicitBinary = binary
     }
 
     public static func locateBinary() -> URL? {
@@ -44,7 +47,19 @@ public struct SystemTailscale: TailscaleControlling {
         return (permissions.intValue & 0o022) == 0
     }
 
+    private func resolveBinary() -> URL? {
+        explicitBinary ?? SystemTailscale.locateBinary()
+    }
+
     public func status() async -> TailscaleStatus? {
+        if let status = await statusOnce() { return status }
+        // One retry: the daemon may be restarting, or the CLI may have been
+        // replaced by an update. A second miss is reported as unavailable.
+        try? await Task.sleep(for: .milliseconds(250))
+        return await statusOnce()
+    }
+
+    private func statusOnce() async -> TailscaleStatus? {
         guard case .success(let output) = await run(["status", "--json"], timeout: 6) else {
             return nil
         }
@@ -91,21 +106,42 @@ public struct SystemTailscale: TailscaleControlling {
     // MARK: - Process
 
     private func run(_ arguments: [String], timeout: TimeInterval) async -> Result<String, TailscaleError> {
-        guard let binary else { return .failure(.unavailable) }
+        guard let binary = resolveBinary() else { return .failure(.unavailable) }
 
         return await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
+                let fileManager = FileManager.default
+                let outputURL = fileManager.temporaryDirectory
+                    .appendingPathComponent("cornice-tailscale-\(UUID().uuidString).out")
+                let errorURL = fileManager.temporaryDirectory
+                    .appendingPathComponent("cornice-tailscale-\(UUID().uuidString).err")
+                fileManager.createFile(atPath: outputURL.path, contents: nil)
+                fileManager.createFile(atPath: errorURL.path, contents: nil)
+                defer {
+                    try? fileManager.removeItem(at: outputURL)
+                    try? fileManager.removeItem(at: errorURL)
+                }
+
+                // Files instead of pipes: a chatty CLI can't fill a pipe buffer and
+                // stall forever, and stderr never contaminates the JSON on stdout.
+                guard let outputHandle = try? FileHandle(forWritingTo: outputURL),
+                      let errorHandle = try? FileHandle(forWritingTo: errorURL)
+                else {
+                    continuation.resume(returning: .failure(.commandFailed("Could not capture CLI output")))
+                    return
+                }
+
                 let process = Process()
                 process.executableURL = binary
                 process.arguments = arguments
-
-                let pipe = Pipe()
-                process.standardOutput = pipe
-                process.standardError = pipe
+                process.standardOutput = outputHandle
+                process.standardError = errorHandle
 
                 do {
                     try process.run()
                 } catch {
+                    try? outputHandle.close()
+                    try? errorHandle.close()
                     continuation.resume(returning: .failure(.commandFailed(error.localizedDescription)))
                     return
                 }
@@ -117,17 +153,29 @@ public struct SystemTailscale: TailscaleControlling {
 
                 if process.isRunning {
                     process.terminate()
+                    let grace = Date().addingTimeInterval(1)
+                    while process.isRunning && Date() < grace {
+                        usleep(20_000)
+                    }
+                    if process.isRunning {
+                        kill(process.processIdentifier, SIGKILL)
+                    }
+                    try? outputHandle.close()
+                    try? errorHandle.close()
                     continuation.resume(returning: .failure(.timedOut))
                     return
                 }
 
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(data: data, encoding: .utf8) ?? ""
+                try? outputHandle.close()
+                try? errorHandle.close()
+
+                let output = (try? String(contentsOf: outputURL, encoding: .utf8)) ?? ""
 
                 if process.terminationStatus == 0 {
                     continuation.resume(returning: .success(output))
                 } else {
-                    let message = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let errorOutput = (try? String(contentsOf: errorURL, encoding: .utf8)) ?? ""
+                    let message = errorOutput.trimmingCharacters(in: .whitespacesAndNewlines)
                     continuation.resume(
                         returning: .failure(.commandFailed(message.isEmpty ? "exit \(process.terminationStatus)" : message))
                     )

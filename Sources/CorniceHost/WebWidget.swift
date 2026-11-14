@@ -167,11 +167,6 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         // pageZoom set before load is reset by the navigation.
         webView.pageZoom = max(0.5, min(2.0, uiScale))
         log.warn("page loaded \(bundle.manifest.id)")
-        webView.evaluateJavaScript(
-            "window.devicePixelRatio + '|' + document.documentElement.className + '|' + getComputedStyle(document.querySelector('.label') || document.body).fontSize"
-        ) { value, _ in
-            self.log.warn("page env \(value ?? "?") zoom=\(webView.pageZoom) ctxScale=\(self.uiScale)")
-        }
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -244,6 +239,7 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         Task { [weak self] in
             guard let self else { return }
             guard let status = await tailscale.status() else {
+                self.log.warn("tailscale status unavailable")
                 self.respond(id: id, payload: ["ok": false, "error": "Tailscale unavailable"])
                 return
             }

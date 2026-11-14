@@ -254,6 +254,12 @@ WidgetManifest(id:name:version:apiVersion:capabilities:networkHosts:keychainServ
 sin permiso de escritura para grupo/otros. Prefiere el binario de la app (`/Applications/…`)
 al wrapper de `/usr/local/bin` y al de Homebrew.
 
+El binario se resuelve **en cada llamada** (no en `init`): si Tailscale se instala o se
+actualiza con la app abierta, la siguiente consulta lo encuentra. `status` reintenta una vez
+a los 250 ms (daemon reiniciándose). La salida va a **archivos temporales**, no a un pipe:
+evita el bloqueo cuando el JSON supera el buffer y, sobre todo, que un aviso por stderr
+contamine el JSON (antes se mezclaban y `parse` devolvía nil → “CLI no disponible”).
+
 `WidgetContext`: `http`, `secrets`, `settings`, `language`, `tailscale`, `log`,
 `availableWidth`, `capabilities`.
 
@@ -490,6 +496,7 @@ públicas si contienen widgets personales (§2).
 | El zoom no se aplica | `pageZoom` se resetea al navegar: aplicarlo en `didFinish` |
 | Un bundle se rechaza por “link or special file” | contiene un symlink; WebKit tendría lectura fuera del bundle |
 | Tailscale deja de responder tras mover el binario | solo se ejecutan binarios root/usuario sin escritura de grupo; revisa owner y permisos |
+| “CLI de Tailscale no disponible” con el CLI funcionando | stderr mezclado con el JSON o binario cacheado en `init`; el host ya separa salidas y resuelve por llamada. Si persiste, mira `tailscale status unavailable` en el log |
 | El swipe va al revés | doble inversión de `scrollingDeltaX`: el offset usa el mismo signo que el delta |
 | La rueda del ratón no pagina | `phase == .none` siempre es false (OptionSet vs Optional); usa `phase.isEmpty` |
 | La rueda salta varias páginas | el ratón emite varios eventos por notch: acumula y aplica `WheelPagingState` |
