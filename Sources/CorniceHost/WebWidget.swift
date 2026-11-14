@@ -62,6 +62,7 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
     private let http: (any HTTPClient)?
     private let settings: WidgetSettings
     private let language: WidgetLanguage
+    private let uiScale: CGFloat
     private let tailscale: (any TailscaleControlling)?
     private let log: WidgetLog
 
@@ -70,6 +71,7 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         self.http = context.http
         self.settings = context.settings
         self.language = context.language
+        self.uiScale = context.uiScale
         self.tailscale = context.tailscale
         self.log = context.log
 
@@ -108,6 +110,7 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
 
         webView.navigationDelegate = self
         webView.underPageBackgroundColor = .clear
+        webView.pageZoom = max(0.5, min(2.0, context.uiScale))
         webView.setValue(false, forKey: "drawsBackground")
         log.warn("settings keys \(context.settings.values.keys.sorted())")
 
@@ -154,7 +157,14 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        // pageZoom set before load is reset by the navigation.
+        webView.pageZoom = max(0.5, min(2.0, uiScale))
         log.warn("page loaded \(bundle.manifest.id)")
+        webView.evaluateJavaScript(
+            "window.devicePixelRatio + '|' + document.documentElement.className + '|' + getComputedStyle(document.querySelector('.label') || document.body).fontSize"
+        ) { value, _ in
+            self.log.warn("page env \(value ?? "?") zoom=\(webView.pageZoom) ctxScale=\(self.uiScale)")
+        }
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -348,6 +358,7 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         window.cornice.settings = \(json);
         window.cornice.language = "\(language.rawValue)";
         window.cornice.locale = "\(language.localeIdentifier)";
+        window.cornice.pixelRatio = window.devicePixelRatio || 1;
         """
     }
 
@@ -356,6 +367,14 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
       const style = document.createElement('style');
       style.textContent = 'html, body { background: transparent !important; margin: 0; }';
       document.documentElement.appendChild(style);
+
+      // 1x displays: grayscale antialiasing thins strokes, so let WebKit decide.
+      if ((window.devicePixelRatio || 1) < 1.5) {
+        document.documentElement.classList.add('cornice-low-dpi');
+        const crisp = document.createElement('style');
+        crisp.textContent = 'html.cornice-low-dpi, html.cornice-low-dpi body { -webkit-font-smoothing: auto !important; }';
+        document.documentElement.appendChild(crisp);
+      }
     })();
     """
 }

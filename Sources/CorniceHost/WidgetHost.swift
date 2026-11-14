@@ -56,6 +56,9 @@ public final class WidgetHost {
     /// Language used by widget UIs. Set through `setLanguage` so mounted widgets
     /// get rebuilt with the new strings.
     public private(set) var language: AppLanguage = .system
+    /// Scale applied to the grid and to the webviews' page zoom.
+    public private(set) var uiScale: Double = 1.0
+    private var scaleTask: Task<Void, Never>?
 
     private let builtInFactories: [any WidgetFactory]
     private let secretStore: any SecretAccessing
@@ -193,6 +196,21 @@ public final class WidgetHost {
         reload()
     }
 
+    /// Applies a widget scale; the webviews reload after a short debounce so
+    /// dragging the slider does not remount on every step.
+    public func setUIScale(_ scale: Double) {
+        guard scale != uiScale else { return }
+        uiScale = scale
+
+        guard !widgets.isEmpty else { return }
+        scaleTask?.cancel()
+        scaleTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard let self, !Task.isCancelled else { return }
+            self.reload()
+        }
+    }
+
     public func setEnabled(_ id: WidgetID, _ enabled: Bool) {
         guard let index = catalog.firstIndex(where: { $0.id == id }),
               catalog[index].enabled != enabled
@@ -300,7 +318,8 @@ public final class WidgetHost {
 
         let pages = WidgetGridLayout.layout(
             widgets: widgets.map { WidgetGridLayout.Widget(id: $0.id, size: $0.size) },
-            available: CGSize(width: width, height: 100_000)
+            available: CGSize(width: width, height: 100_000),
+            scale: CGFloat(uiScale)
         )
 
         guard let first = pages.first else { return 0 }
@@ -353,6 +372,7 @@ public final class WidgetHost {
             secrets: scopedSecrets,
             http: http,
             settings: WidgetSettings(values: settingsStore.values(for: manifest)),
+            uiScale: CGFloat(uiScale),
             language: WidgetLanguage(rawValue: language.resolved.rawValue) ?? .en,
             tailscale: manifest.capabilities.contains(.tailscale) ? tailscale : nil,
             log: widgetLog,

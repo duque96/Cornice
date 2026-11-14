@@ -58,7 +58,8 @@ public final class NotchSurfaceController {
             expandedSize: settings.settings.expandedSize,
             notchCornerRadius: 8,
             mode: .simulated,
-            motion: settings.settings.motion
+            motion: settings.settings.motion,
+            uiScale: settings.settings.uiScale
         )
         self.model = initial
         self.panel = NotchPanel(contentRect: CGRect(origin: .zero, size: settings.settings.expandedSize))
@@ -134,6 +135,7 @@ public final class NotchSurfaceController {
     /// Re-applies everything the options window can change.
     public func applySettings() {
         model.motion = settings.settings.motion
+        model.uiScale = settings.settings.uiScale
         refreshGeometry()
     }
 

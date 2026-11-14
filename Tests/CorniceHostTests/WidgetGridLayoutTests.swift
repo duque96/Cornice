@@ -99,4 +99,20 @@ final class WidgetGridLayoutTests: XCTestCase {
             ).isEmpty
         )
     }
+
+    func testScaleGrowsRowsAndSpacing() {
+        let pages = WidgetGridLayout.layout(
+            widgets: [
+                WidgetGridLayout.Widget(id: "a", size: GridSize(columns: 3, rows: 3)),
+            ],
+            available: CGSize(width: 380, height: 2_000),
+            scale: 1.5
+        )
+
+        let frame = pages[0].items[0].frame
+
+        XCTAssertEqual(frame.height, 1.5 * (30 * 3 + 8 * 2), accuracy: 0.5)
+        // Columns use the scaled gap too: (380 - 5*12)/6 = 53.33 → 3 spans + 2 gaps.
+        XCTAssertEqual(frame.width, 184, accuracy: 0.5)
+    }
 }

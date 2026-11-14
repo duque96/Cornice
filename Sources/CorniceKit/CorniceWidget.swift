@@ -77,6 +77,8 @@ public struct WidgetContext {
     public let http: (any HTTPClient)?
     /// Resolved settings (defaults merged with what the user saved).
     public let settings: WidgetSettings
+    /// Rendered widget scale (1.0 = normal).
+    public let uiScale: CGFloat
     /// Language the host is running in.
     public let language: WidgetLanguage
     /// `nil` when the widget did not declare `.tailscale`.
@@ -90,6 +92,7 @@ public struct WidgetContext {
         secrets: (any SecretAccessing)?,
         http: (any HTTPClient)?,
         settings: WidgetSettings,
+        uiScale: CGFloat,
         language: WidgetLanguage,
         tailscale: (any TailscaleControlling)?,
         log: WidgetLog,
@@ -99,6 +102,7 @@ public struct WidgetContext {
         self.secrets = secrets
         self.http = http
         self.settings = settings
+        self.uiScale = uiScale
         self.language = language
         self.tailscale = tailscale
         self.log = log

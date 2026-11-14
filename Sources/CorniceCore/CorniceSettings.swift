@@ -50,6 +50,8 @@ public struct CorniceSettings: Codable, Sendable, Equatable {
     /// When off, the app lives only in the notch.
     public var showMenuBarIcon: Bool
     public var language: AppLanguage
+    /// Scales widget text and grid cells. 1.0 on Retina; 1.15–1.25 helps on 1x.
+    public var uiScale: Double
 
     public init(
         motion: NotchMotion = NotchMotion(),
@@ -59,7 +61,8 @@ public struct CorniceSettings: Codable, Sendable, Equatable {
         expandedHeight: Double = 170,
         fitToContent: Bool = true,
         showMenuBarIcon: Bool = true,
-        language: AppLanguage = .system
+        language: AppLanguage = .system,
+        uiScale: Double = 1.0
     ) {
         self.motion = motion
         self.hoverOpenDelay = hoverOpenDelay
@@ -69,6 +72,7 @@ public struct CorniceSettings: Codable, Sendable, Equatable {
         self.fitToContent = fitToContent
         self.showMenuBarIcon = showMenuBarIcon
         self.language = language
+        self.uiScale = uiScale
     }
 
     public static let standard = CorniceSettings()
@@ -83,6 +87,7 @@ public struct CorniceSettings: Codable, Sendable, Equatable {
         fitToContent = try container.decodeIfPresent(Bool.self, forKey: .fitToContent) ?? true
         showMenuBarIcon = try container.decodeIfPresent(Bool.self, forKey: .showMenuBarIcon) ?? true
         language = try container.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .system
+        uiScale = try container.decodeIfPresent(Double.self, forKey: .uiScale) ?? 1.0
     }
 
     public var expandedSize: CGSize {
@@ -102,6 +107,7 @@ public struct CorniceSettings: Codable, Sendable, Equatable {
         copy.hoverCloseDelay = hoverCloseDelay.clamped(to: 0...1.00)
         copy.expandedWidth = expandedWidth.clamped(to: 280...900)
         copy.expandedHeight = expandedHeight.clamped(to: 120...420)
+        copy.uiScale = uiScale.clamped(to: 0.85...1.5)
         return copy
     }
 }

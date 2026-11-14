@@ -35,10 +35,12 @@ public enum WidgetGridLayout {
         }
     }
 
-    public static func layout(widgets: [Widget], available: CGSize) -> [Page] {
+    public static func layout(widgets: [Widget], available: CGSize, scale: CGFloat = 1) -> [Page] {
         guard !widgets.isEmpty, available.width > 0, available.height > 0 else { return [] }
 
-        let columnWidth = max(1, (available.width - gap * CGFloat(columns - 1)) / CGFloat(columns))
+        let unit = rowUnit * max(0.5, scale)
+        let spacing = gap * max(0.5, scale)
+        let columnWidth = max(1, (available.width - spacing * CGFloat(columns - 1)) / CGFloat(columns))
         let ordered = widgets.enumerated().sorted { lhs, rhs in
             lhs.element.priority == rhs.element.priority
                 ? lhs.offset < rhs.offset
@@ -65,16 +67,16 @@ public enum WidgetGridLayout {
             let span = min(max(1, widget.size.columns), columns)
             let rows = max(1, widget.size.rows)
 
-            let width = columnWidth * CGFloat(span) + gap * CGFloat(span - 1)
+            let width = columnWidth * CGFloat(span) + spacing * CGFloat(span - 1)
             let height = min(
-                rowUnit * CGFloat(rows) + gap * CGFloat(rows - 1),
+                unit * CGFloat(rows) + spacing * CGFloat(rows - 1),
                 available.height
             )
 
             // Wrap to the next row when it does not fit on the current line.
             if x > 0 && x + width > available.width + 0.5 {
                 x = 0
-                y += rowHeight + gap
+                y += rowHeight + spacing
                 rowHeight = 0
             }
 
@@ -90,7 +92,7 @@ public enum WidgetGridLayout {
                 )
             )
 
-            x += width + gap
+            x += width + spacing
             rowHeight = max(rowHeight, height)
         }
 

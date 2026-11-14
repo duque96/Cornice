@@ -173,7 +173,7 @@ A sidebar, one page per section, applied live:
 | **General** | language, menu bar icon, quit |
 | **Motion** | open/close spring, content fade delay and duration |
 | **Interaction** | hover open/close delays |
-| **Panel** | width, height, fit to content, restore defaults |
+| **Panel** | width, height, fit to content, UI scale, restore defaults |
 | **Layout** | visual grid editor: drag a corner to resize, reset sizes |
 | **Widgets** | gallery: enable/disable, drag to reorder, source, capabilities, open folder, reload |
 | **<widget name>** | one page per widget that declares settings |

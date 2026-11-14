@@ -67,12 +67,15 @@ public struct WidgetAreaView: View {
             WidgetGridLayout.Widget(id: $0.id, size: $0.size)
         }
 
-        let full = WidgetGridLayout.layout(widgets: widgets, available: size)
+        let scale = CGFloat(host.uiScale)
+
+        let full = WidgetGridLayout.layout(widgets: widgets, available: size, scale: scale)
         guard full.count > 1 else { return full }
 
         return WidgetGridLayout.layout(
             widgets: widgets,
-            available: CGSize(width: size.width, height: max(0, size.height - 14))
+            available: CGSize(width: size.width, height: max(0, size.height - 14)),
+            scale: scale
         )
     }
 

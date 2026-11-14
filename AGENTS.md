@@ -20,7 +20,7 @@ desde disco, declaran capacidades y nunca tocan el sistema directamente.
 - **Host**: `CorniceHost` — montaje, reloj, capacidades, secretos, loader de disco, UI de ajustes.
 - **Core**: `CorniceCore` — panel, geometría, animación, ajustes, localización.
 
-Estado: M11. 104 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
+Estado: M11. 106 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
 App Store.
 
 > Si una tarea toca el homelab, aplica también `~/.config/opencode/AGENTS.md` y el repo
@@ -84,7 +84,7 @@ Widgets de disco → solo ven el bridge JS, nunca Swift
 
 ```bash
 swift build                      # debug
-swift test                       # 104 tests
+swift test                       # 106 tests
 ./build-app.sh                   # release + dist/Cornice.app (copia BundledWidgets a Resources)
 ./install.sh                     # ~/Applications + LaunchAgent (arranque al login)
 ./uninstall.sh                   # quita app y agente; conserva datos
@@ -179,7 +179,8 @@ Si el contenido cambia, `host.onLayoutChange` → `controller.refreshStage()`.
 ## 6. Layout
 
 - Grid de 6 columnas. `columns` = span 1–6; `rows` = altura.
-- `rowUnit = 30`, `gap = 8`; altura de celda `30r + 8(r−1)`.
+- `rowUnit = 30`, `gap = 8`; altura de celda `30r + 8(r−1)`. `layout(..., scale:)` multiplica
+  filas y separaciones por `uiScale`.
 - `WidgetGridLayout.layout(widgets:available:)` (puro, testeado) devuelve páginas de frames.
 - Los widgets fluyen, hacen wrap y pasan a otra página si la fila no cabe. Los puntos
   reservan 14 pt **solo si hay más de una página**.
@@ -204,6 +205,7 @@ Si el contenido cambia, `host.onLayoutChange` → `controller.refreshStage()`.
 | `fitToContent` | el panel se ajusta al contenido (default `true`) |
 | `showMenuBarIcon` | icono en barra de menús (default `true`) |
 | `language` | `system` / `en` / `es` |
+| `uiScale` | escala de texto/celdas (0.85–1.5); 1.15–1.25 en pantallas 1x |
 
 Reglas:
 
@@ -320,6 +322,12 @@ permiso de lectura sobre todo el directorio; un symlink podría apuntar a `~/.ss
 `WKWebView` con `websiteDataStore = .nonPersistent()`, navegación confinada al bundle,
 sin Keychain, sin archivos, sin `URLSession`.
 
+**Escala**: `uiScale` multiplica las celdas del grid y se aplica como `pageZoom` al
+webview. Ojo: `pageZoom` puesto antes de `loadFileURL` **se resetea**; se aplica en
+`didFinish`. En pantallas 1x el host añade `html.cornice-low-dpi` y expone
+`cornice.pixelRatio` para que los widgets suban tipografía; también fuerza
+`-webkit-font-smoothing: auto` (el `antialiased` adelgaza en 1x).
+
 **Lockdown de red**: `WidgetContentRules` compila un `WKContentRuleList` que bloquea
 `^https?://`, `^wss?://` y `^ftp://`. Sin él, la página podría usar `fetch`, `<img>` o
 `<script src>` contra cualquier host y saltarse las capacidades (incluido exfiltrar settings
@@ -405,7 +413,7 @@ Hay un migrador de credenciales legacy en el host; no documentes de dónde lee.
 swift test
 ```
 
-104 tests. Cobertura por área:
+106 tests. Cobertura por área:
 
 - Geometría del notch y zonas (puro).
 - Máquina de estados del hover.
@@ -463,6 +471,8 @@ públicas si contienen widgets personales (§2).
 | La página web se queda con el ancho viejo | devolver el `WKWebView` directo a SwiftUI no reflowea → contenedor con Auto Layout |
 | Un widget no carga y el log dice “content rules unavailable” | falló la compilación del `WKContentRuleList`; se falla cerrado a propósito |
 | Un widget intenta `fetch()` directo y no funciona | correcto: solo `cornice.fetch`; el resto lo bloquea el content rule list |
+| Se ve borroso en un monitor 1x | densidad física (~109 ppi) + tipos pequeños → subir `uiScale` a 1.15–1.25 y usar la clase `cornice-low-dpi` |
+| El zoom no se aplica | `pageZoom` se resetea al navegar: aplicarlo en `didFinish` |
 | Un bundle se rechaza por “link or special file” | contiene un symlink; WebKit tendría lectura fuera del bundle |
 | Tailscale deja de responder tras mover el binario | solo se ejecutan binarios root/usuario sin escritura de grupo; revisa owner y permisos |
 | El swipe va al revés | doble inversión de `scrollingDeltaX`: el offset usa el mismo signo que el delta |

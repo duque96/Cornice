@@ -269,6 +269,21 @@ public struct PanelSettingsView: View {
                 .disabled(store.settings.fitToContent)
             }
 
+            SettingsGroup(title: t("Widget scale", "Escala de widgets")) {
+                SettingsSlider(
+                    title: t("UI scale", "Escala de UI"),
+                    keyPath: \.uiScale,
+                    range: 0.85...1.5,
+                    step: 0.05,
+                    format: "%.2f×",
+                    hint: t(
+                        "Scales widget text and cells. 1.15–1.25 helps on non-Retina displays.",
+                        "Escala el texto y las celdas. 1,15–1,25 ayuda en pantallas no Retina."
+                    ),
+                    store: store
+                )
+            }
+
             Divider()
 
             HStack {

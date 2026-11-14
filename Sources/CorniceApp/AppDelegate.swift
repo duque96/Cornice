@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let host = WidgetHost(factories: [])
         host.setLanguage(settings.settings.language)
+        host.setUIScale(settings.settings.uiScale)
         widgetHost = host
 
         controller.widgetContent = AnyView(WidgetAreaView(host: host, pager: pager))
@@ -58,6 +59,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         settings.onChange = { [weak self, weak controller] in
             controller?.applySettings()
+            if let scale = self?.settingsStore?.settings.uiScale {
+                self?.widgetHost?.setUIScale(scale)
+            }
             if let language = self?.settingsStore?.settings.language {
                 self?.widgetHost?.setLanguage(language)
                 if self?.currentLanguage != language {

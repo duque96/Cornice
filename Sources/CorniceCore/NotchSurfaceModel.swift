@@ -75,6 +75,7 @@ public final class NotchSurfaceModel {
     public var notchCornerRadius: CGFloat
     public var mode: ScreenGeometry.Mode
     public var motion: NotchMotion
+    public var uiScale: Double
     /// Set by the controller: lets the panel draw a settings button.
     @ObservationIgnored public var onOpenSettings: (() -> Void)?
     /// The stage content injected by the app (the widget area).
@@ -85,13 +86,15 @@ public final class NotchSurfaceModel {
         expandedSize: CGSize,
         notchCornerRadius: CGFloat,
         mode: ScreenGeometry.Mode,
-        motion: NotchMotion = NotchMotion()
+        motion: NotchMotion = NotchMotion(),
+        uiScale: Double = 1.0
     ) {
         self.notchSize = notchSize
         self.expandedSize = expandedSize
         self.notchCornerRadius = notchCornerRadius
         self.mode = mode
         self.motion = motion
+        self.uiScale = uiScale
     }
 
     public var isOpen: Bool { state == .open }

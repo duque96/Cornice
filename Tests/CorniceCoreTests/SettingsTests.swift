@@ -66,6 +66,7 @@ final class SettingsTests: XCTestCase {
         store.set(\.expandedWidth, 520)
         store.set(\.hoverCloseDelay, 0.25)
         store.set(\.showMenuBarIcon, false)
+        store.set(\.uiScale, 1.3)
         store.saveNow()
 
         let reloaded = SettingsStore(url: url)
@@ -74,6 +75,16 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(reloaded.settings.expandedWidth, 520)
         XCTAssertEqual(reloaded.settings.hoverCloseDelay, 0.25)
         XCTAssertFalse(reloaded.settings.showMenuBarIcon)
+        XCTAssertEqual(reloaded.settings.uiScale, 1.3)
+    }
+
+    func testUIScaleIsClamped() {
+        var settings = CorniceSettings()
+        settings.uiScale = 9
+        XCTAssertEqual(settings.clamped().uiScale, 1.5)
+
+        settings.uiScale = 0.1
+        XCTAssertEqual(settings.clamped().uiScale, 0.85)
     }
 
     func testCorruptedFileFallsBackToDefaults() throws {
