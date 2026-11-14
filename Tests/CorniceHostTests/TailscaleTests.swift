@@ -123,4 +123,35 @@ final class TailscaleTests: XCTestCase {
         XCTAssertNotNil(box.contexts[0].tailscale)
         XCTAssertNil(box.contexts[1].tailscale)
     }
+
+    func testHumanReadableOutputIsReportedAsCommandFailure() async throws {
+        // The macOS CLI can exit 0 with a human-readable error instead of JSON.
+        let script = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fake-tailscale-\(UUID().uuidString).sh")
+        try "#!/bin/sh\nprintf 'The Tailscale GUI failed to start: boom\\n'\n"
+            .write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o755)],
+            ofItemAtPath: script.path
+        )
+        defer { try? FileManager.default.removeItem(at: script) }
+
+        let result = await SystemTailscale(binary: script).statusDetailed()
+
+        guard case .failure(.commandFailed(let message)) = result else {
+            return XCTFail("expected commandFailed, got \(result)")
+        }
+        XCTAssertTrue(message.contains("GUI failed to start"))
+    }
+
+    func testMissingBinaryIsUnavailable() async {
+        let missing = FileManager.default.temporaryDirectory
+            .appendingPathComponent("no-tailscale-\(UUID().uuidString)")
+
+        let result = await SystemTailscale(binary: missing).statusDetailed()
+
+        guard case .failure(.unavailable) = result else {
+            return XCTFail("expected unavailable, got \(result)")
+        }
+    }
 }

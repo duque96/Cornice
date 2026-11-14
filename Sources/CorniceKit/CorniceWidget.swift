@@ -52,6 +52,16 @@ public enum TailscaleError: LocalizedError, Sendable, Equatable {
 public protocol TailscaleControlling: Sendable {
     func status() async -> TailscaleStatus?
     func setEnabled(_ enabled: Bool) async -> Result<Void, TailscaleError>
+    /// Same as `status()` but keeps the reason, so the host can tell "CLI not
+    /// installed" apart from "CLI there but not answering".
+    func statusDetailed() async -> Result<TailscaleStatus, TailscaleError>
+}
+
+public extension TailscaleControlling {
+    func statusDetailed() async -> Result<TailscaleStatus, TailscaleError> {
+        if let status = await status() { return .success(status) }
+        return .failure(.unavailable)
+    }
 }
 
 public struct WidgetLog: Sendable {

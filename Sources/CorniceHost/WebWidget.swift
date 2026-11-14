@@ -238,25 +238,27 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
 
         Task { [weak self] in
             guard let self else { return }
-            guard let status = await tailscale.status() else {
-                self.log.warn("tailscale status unavailable")
-                self.respond(id: id, payload: ["ok": false, "error": "Tailscale unavailable"])
-                return
+
+            switch await tailscale.statusDetailed() {
+            case .success(let status):
+                self.log.warn("tailscale status \(status.backendState)")
+
+                self.respond(id: id, payload: [
+                    "ok": true,
+                    "status": [
+                        "backendState": status.backendState,
+                        "hostname": status.hostname ?? "",
+                        "ip": status.ip ?? "",
+                        "peersOnline": status.peersOnline,
+                        "peersTotal": status.peersTotal,
+                        "version": status.version ?? "",
+                    ],
+                ])
+            case .failure(let error):
+                let message = error.errorDescription ?? "Tailscale unavailable"
+                self.log.warn("tailscale status failed: \(message)")
+                self.respond(id: id, payload: ["ok": false, "error": message])
             }
-
-            self.log.warn("tailscale status \(status.backendState)")
-
-            self.respond(id: id, payload: [
-                "ok": true,
-                "status": [
-                    "backendState": status.backendState,
-                    "hostname": status.hostname ?? "",
-                    "ip": status.ip ?? "",
-                    "peersOnline": status.peersOnline,
-                    "peersTotal": status.peersTotal,
-                    "version": status.version ?? "",
-                ],
-            ])
         }
     }
 

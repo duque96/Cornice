@@ -258,7 +258,14 @@ El binario se resuelve **en cada llamada** (no en `init`): si Tailscale se insta
 actualiza con la app abierta, la siguiente consulta lo encuentra. `status` reintenta una vez
 a los 250 ms (daemon reiniciándose). La salida va a **archivos temporales**, no a un pipe:
 evita el bloqueo cuando el JSON supera el buffer y, sobre todo, que un aviso por stderr
-contamine el JSON (antes se mezclaban y `parse` devolvía nil → “CLI no disponible”).
+contamine el JSON. Al vencer el timeout se escala a `SIGTERM` → `SIGKILL`: un CLI colgado
+que sobrevive deja el canal con la GUI/extension atascado y **todas** las llamadas
+posteriores fallan con “The Tailscale GUI failed to start”.
+
+`statusDetailed()` conserva el motivo (el protocolo tiene una implementación por defecto
+que devuelve `.unavailable`). El CLI puede salir con código 0 y texto en vez de JSON; eso
+se reporta como `.commandFailed` y el widget distingue “CLI no disponible” de
+“Tailscale no responde”.
 
 `WidgetContext`: `http`, `secrets`, `settings`, `language`, `tailscale`, `log`,
 `availableWidth`, `capabilities`.
@@ -496,7 +503,7 @@ públicas si contienen widgets personales (§2).
 | El zoom no se aplica | `pageZoom` se resetea al navegar: aplicarlo en `didFinish` |
 | Un bundle se rechaza por “link or special file” | contiene un symlink; WebKit tendría lectura fuera del bundle |
 | Tailscale deja de responder tras mover el binario | solo se ejecutan binarios root/usuario sin escritura de grupo; revisa owner y permisos |
-| “CLI de Tailscale no disponible” con el CLI funcionando | stderr mezclado con el JSON o binario cacheado en `init`; el host ya separa salidas y resuelve por llamada. Si persiste, mira `tailscale status unavailable` en el log |
+| “CLI de Tailscale no disponible” con el CLI funcionando | stderr mezclado con el JSON, binario cacheado en `init` o un CLI colgado que atasca el canal GUI↔extensión; el host ya separa salidas, resuelve por llamada y mata el proceso a los 6 s. Si persiste, reinicia Tailscale (el CLI desde Terminal debe devolver JSON) |
 | El swipe va al revés | doble inversión de `scrollingDeltaX`: el offset usa el mismo signo que el delta |
 | La rueda del ratón no pagina | `phase == .none` siempre es false (OptionSet vs Optional); usa `phase.isEmpty` |
 | La rueda salta varias páginas | el ratón emite varios eventos por notch: acumula y aplica `WheelPagingState` |

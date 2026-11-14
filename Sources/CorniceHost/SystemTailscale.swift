@@ -48,22 +48,40 @@ public struct SystemTailscale: TailscaleControlling {
     }
 
     private func resolveBinary() -> URL? {
-        explicitBinary ?? SystemTailscale.locateBinary()
+        if let explicitBinary {
+            return SystemTailscale.isTrustedExecutable(explicitBinary) ? explicitBinary : nil
+        }
+        return SystemTailscale.locateBinary()
     }
 
     public func status() async -> TailscaleStatus? {
-        if let status = await statusOnce() { return status }
+        if case .success(let status) = await statusDetailed() { return status }
+        return nil
+    }
+
+    public func statusDetailed() async -> Result<TailscaleStatus, TailscaleError> {
+        if case .success(let status) = await statusOnce() { return .success(status) }
         // One retry: the daemon may be restarting, or the CLI may have been
-        // replaced by an update. A second miss is reported as unavailable.
+        // replaced by an update. A second miss is reported with its reason.
         try? await Task.sleep(for: .milliseconds(250))
         return await statusOnce()
     }
 
-    private func statusOnce() async -> TailscaleStatus? {
-        guard case .success(let output) = await run(["status", "--json"], timeout: 6) else {
-            return nil
+    private func statusOnce() async -> Result<TailscaleStatus, TailscaleError> {
+        let result = await run(["status", "--json"], timeout: 6)
+
+        switch result {
+        case .failure(let error):
+            return .failure(error)
+        case .success(let output):
+            // The macOS CLI can exit 0 with a human-readable error instead of JSON
+            // (e.g. when its control channel to the GUI/extension is broken).
+            guard let parsed = Self.parse(Data(output.utf8)) else {
+                let message = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                return .failure(.commandFailed(message.isEmpty ? "Unexpected CLI output" : message))
+            }
+            return .success(parsed)
         }
-        return Self.parse(Data(output.utf8))
     }
 
     public func setEnabled(_ enabled: Bool) async -> Result<Void, TailscaleError> {
