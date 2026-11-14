@@ -233,6 +233,18 @@ Inside `CorniceCore` the interaction is split on purpose:
 `NotchGeometryMath`, `WidgetGridLayout`, `WidgetResize` and `WidgetOrdering` are pure and
 unit-tested.
 
+## Security model
+
+- **Widgets are untrusted.** Their page cannot reach the network (WebKit content rules block
+  `http(s)`, `ws(s)` and `ftp`), cannot read files outside their bundle (symlinks and special
+  files inside a bundle are rejected) and never see secrets.
+- **Requests go through the host:** allow-list, exact-host credential injection, 30 req/min,
+  redirect guard, 2 MB response cap and an ephemeral session per widget.
+- **The host app is not sandboxed**, because it spawns the Tailscale CLI and talks to the LAN.
+  It is signed with the hardened runtime and library validation; the practical boundary is
+  the WebKit content process, so a WebKit 0-day is equivalent to a browser compromise.
+  Isolating widget webviews in an XPC service is the next step if the threat model tightens.
+
 ## Tests
 
 ```bash
@@ -241,7 +253,8 @@ swift test
 
 Geometry, hover state machine, interactive pager, settings clamping/migration, grid and pages,
 ordering, resizing, disk loader, installer upgrades, capability enforcement, HTTP, manifest
-contract, localization and a load test for the bundled example widget.
+contract, localization, web security (network rules and redirects), unsafe bundles,
+untrusted CLI binaries and a load test for the bundled example widget.
 
 Snapshot helpers render the surface, a filmstrip of the transition and the options form to
 `$CORNICE_SNAPSHOT_DIR`:

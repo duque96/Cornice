@@ -231,6 +231,8 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
                 return
             }
 
+            self.log.warn("tailscale status \(status.backendState)")
+
             self.respond(id: id, payload: [
                 "ok": true,
                 "status": [

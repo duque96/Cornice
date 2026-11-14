@@ -110,3 +110,97 @@ final class WidgetHTTPClientTests: XCTestCase {
         }
     }
 }
+
+
+final class WidgetBundleSafetyTests: XCTestCase {
+    private func makeBundle() throws -> URL {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cornice-safe-\(UUID().uuidString)", isDirectory: true)
+        let bundle = root.appendingPathComponent("Safe.cornicewidget", isDirectory: true)
+        try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
+
+        let manifest = """
+        {
+          "id": "com.example.safe",
+          "name": "Safe",
+          "version": "1.0.0",
+          "apiVersion": 1,
+          "capabilities": [],
+          "placement": { "columns": 3, "rows": 2 },
+          "entry": "index.html"
+        }
+        """
+        try manifest.write(to: bundle.appendingPathComponent("manifest.json"), atomically: true, encoding: .utf8)
+        try "<html></html>".write(to: bundle.appendingPathComponent("index.html"), atomically: true, encoding: .utf8)
+        return bundle
+    }
+
+    func testRejectsSymlinksInsideABundle() throws {
+        let bundle = try makeBundle()
+        defer { try? FileManager.default.removeItem(at: bundle.deletingLastPathComponent()) }
+
+        try FileManager.default.createSymbolicLink(
+            at: bundle.appendingPathComponent("leak"),
+            withDestinationURL: URL(fileURLWithPath: "/etc/hosts")
+        )
+
+        XCTAssertThrowsError(try WidgetBundleStore.load(bundleAt: bundle)) { error in
+            guard case DiskWidgetError.unsafeEntry = error else {
+                return XCTFail("Expected unsafeEntry, got \(error)")
+            }
+        }
+    }
+
+    func testAcceptsABundleWithRegularFiles() throws {
+        let bundle = try makeBundle()
+        defer { try? FileManager.default.removeItem(at: bundle.deletingLastPathComponent()) }
+
+        XCTAssertNoThrow(try WidgetBundleStore.load(bundleAt: bundle))
+    }
+}
+
+final class TailscaleBinaryTests: XCTestCase {
+    private func makeExecutable(_ permissions: Int) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cornice-bin-\(UUID().uuidString)")
+        try "#!/bin/sh\nexit 0\n".write(to: url, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: permissions], ofItemAtPath: url.path)
+        return url
+    }
+
+    func testTrustsAUserOwnedExecutable() throws {
+        let url = try makeExecutable(0o755)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        XCTAssertTrue(SystemTailscale.isTrustedExecutable(url))
+    }
+
+    func testRejectsAGroupWritableExecutable() throws {
+        let url = try makeExecutable(0o775)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        XCTAssertFalse(SystemTailscale.isTrustedExecutable(url))
+    }
+
+    func testRejectsAMissingBinary() {
+        XCTAssertFalse(
+            SystemTailscale.isTrustedExecutable(
+                URL(fileURLWithPath: "/tmp/cornice-missing-\(UUID().uuidString)")
+            )
+        )
+    }
+
+    func testFollowsSymlinks() throws {
+        let target = try makeExecutable(0o755)
+        let link = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cornice-link-\(UUID().uuidString)")
+        defer {
+            try? FileManager.default.removeItem(at: target)
+            try? FileManager.default.removeItem(at: link)
+        }
+
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+
+        XCTAssertTrue(SystemTailscale.isTrustedExecutable(link))
+    }
+}

@@ -21,7 +21,7 @@ if [ -d BundledWidgets ]; then
 fi
 
 # Firma ad-hoc: suficiente para ejecutarlo localmente.
-codesign --force --sign - "${APP_DIR}"
+codesign --force --options runtime --sign - "${APP_DIR}"
 
 echo "Construido: ${APP_DIR}"
 echo "Para ejecutarlo: open \"${APP_DIR}\""

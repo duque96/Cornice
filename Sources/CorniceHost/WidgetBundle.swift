@@ -95,6 +95,7 @@ public enum DiskWidgetError: LocalizedError, Equatable {
     case unknownCapability(String)
     case missingEntry(String)
     case entryEscapesBundle
+    case unsafeEntry(String)
 
     public var errorDescription: String? {
         switch self {
@@ -104,6 +105,7 @@ public enum DiskWidgetError: LocalizedError, Equatable {
         case .unknownCapability(let value): return "unknown capability '\(value)'"
         case .missingEntry(let path): return "entry '\(path)' does not exist"
         case .entryEscapesBundle: return "entry must stay inside the bundle"
+        case .unsafeEntry(let path): return "'\(path)' is a link or a special file"
         }
     }
 }
@@ -264,12 +266,39 @@ public enum WidgetBundleStore {
             throw DiskWidgetError.missingEntry(entryName)
         }
 
+        try validateContents(of: root)
+
         return DiskWidget(
             manifest: manifest,
             directory: root,
             entry: entry,
             defaultEnabled: dto.defaultEnabled ?? false
         )
+    }
+
+    /// WebKit gets read access to the whole bundle: a symlink could point at
+    /// `~/.ssh` or any other file. Only regular files and directories are allowed.
+    private static func validateContents(of directory: URL) throws {
+        let keys: Set<URLResourceKey> = [.isSymbolicLinkKey, .isRegularFileKey, .isDirectoryKey]
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: Array(keys)
+        ) else { return }
+
+        for case let url as URL in enumerator {
+            let values = try url.resourceValues(forKeys: keys)
+
+            if values.isSymbolicLink == true {
+                throw DiskWidgetError.unsafeEntry(url.lastPathComponent)
+            }
+            if values.isDirectory == true { continue }
+            guard values.isRegularFile == true else {
+                throw DiskWidgetError.unsafeEntry(url.lastPathComponent)
+            }
+            guard PathContainment.contains(directory, url) else {
+                throw DiskWidgetError.entryEscapesBundle
+            }
+        }
     }
 
     private static func kind(for setting: DiskWidgetManifest.SettingDTO) throws -> WidgetSetting.Kind {

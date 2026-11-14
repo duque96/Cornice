@@ -20,7 +20,7 @@ desde disco, declaran capacidades y nunca tocan el sistema directamente.
 - **Host**: `CorniceHost` — montaje, reloj, capacidades, secretos, loader de disco, UI de ajustes.
 - **Core**: `CorniceCore` — panel, geometría, animación, ajustes, localización.
 
-Estado: M11. 98 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
+Estado: M11. 104 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
 App Store.
 
 > Si una tarea toca el homelab, aplica también `~/.config/opencode/AGENTS.md` y el repo
@@ -84,7 +84,7 @@ Widgets de disco → solo ven el bridge JS, nunca Swift
 
 ```bash
 swift build                      # debug
-swift test                       # 98 tests
+swift test                       # 104 tests
 ./build-app.sh                   # release + dist/Cornice.app (copia BundledWidgets a Resources)
 ./install.sh                     # ~/Applications + LaunchAgent (arranque al login)
 ./uninstall.sh                   # quita app y agente; conserva datos
@@ -243,6 +243,10 @@ WidgetManifest(id:name:version:apiVersion:capabilities:networkHosts:keychainServ
   `cornice.tailscale.set(bool)`. El host expone **solo** `status`, `up` y `down` del CLI
   (`SystemTailscale`), con timeout; nunca un shell.
 
+`SystemTailscale` solo ejecuta binarios **de confianza**: owner root o el usuario actual y
+sin permiso de escritura para grupo/otros. Prefiere el binario de la app (`/Applications/…`)
+al wrapper de `/usr/local/bin` y al de Homebrew.
+
 `WidgetContext`: `http`, `secrets`, `settings`, `language`, `tailscale`, `log`,
 `availableWidth`, `capabilities`.
 
@@ -308,6 +312,8 @@ index.html
 Validación (`WidgetBundleStore.load`): manifiesto presente y decodificable, semver,
 `apiVersion`, capacidades conocidas, hosts/servicios coherentes, `entry` **dentro** del
 bundle (componentes de ruta, no `hasPrefix`; ojo `/var` vs `/private/var`) y existente.
+Además se recorre el bundle y se rechazan **symlinks y archivos especiales** (WebKit tiene
+permiso de lectura sobre todo el directorio; un symlink podría apuntar a `~/.ssh`).
 
 ### Sandbox web
 
@@ -399,7 +405,7 @@ Hay un migrador de credenciales legacy en el host; no documentes de dónde lee.
 swift test
 ```
 
-98 tests. Cobertura por área:
+104 tests. Cobertura por área:
 
 - Geometría del notch y zonas (puro).
 - Máquina de estados del hover.
@@ -457,6 +463,8 @@ públicas si contienen widgets personales (§2).
 | La página web se queda con el ancho viejo | devolver el `WKWebView` directo a SwiftUI no reflowea → contenedor con Auto Layout |
 | Un widget no carga y el log dice “content rules unavailable” | falló la compilación del `WKContentRuleList`; se falla cerrado a propósito |
 | Un widget intenta `fetch()` directo y no funciona | correcto: solo `cornice.fetch`; el resto lo bloquea el content rule list |
+| Un bundle se rechaza por “link or special file” | contiene un symlink; WebKit tendría lectura fuera del bundle |
+| Tailscale deja de responder tras mover el binario | solo se ejecutan binarios root/usuario sin escritura de grupo; revisa owner y permisos |
 | El swipe va al revés | doble inversión de `scrollingDeltaX`: el offset usa el mismo signo que el delta |
 | Cambias un HTML y no se ve | no subiste `version` en el manifest |
 
@@ -487,7 +495,8 @@ públicas si contienen widgets personales (§2).
 - **Código y UI en inglés**; documentación de trabajo (este archivo) y conversación en español.
 - Swift 6 estricto: `@MainActor` en todo lo que toca UI/AppKit; lógica pura separada y
   testeada. Nada de `@unchecked Sendable` salvo justificación.
-- No añadir dependencias externas.
+- No añadir dependencias externas. El bundle se firma ad-hoc con `--options runtime`
+  (hardened runtime + library validation).
 - Comentarios solo para lo no obvio (por qué, no qué).
 - Si cambias comportamiento visible, actualiza `README.md` y, si es un invariante, este
   archivo.
@@ -501,4 +510,5 @@ públicas si contienen widgets personales (§2).
 - Fila que rodea la cámara (estilo Droppy) y composiciones solo/pareado.
 - Contrato de **acciones** en el SDK (hacer, no solo mostrar) con capacidades.
 - Tooling de autoría: `cornice new` / `cornice dev` con recarga en caliente.
+- Aislar los webviews en un servicio XPC sandboxeado (hoy la app no está sandboxeada).
 - Más integraciones de infraestructura (servicios self-hosted, CI/PRs, contenedores, red).
