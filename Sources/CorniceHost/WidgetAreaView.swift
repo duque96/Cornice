@@ -102,19 +102,26 @@ public struct WidgetAreaView: View {
     }
 
     private func dots(count: Int, selection: Int) -> some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 0) {
             ForEach(0..<count, id: \.self) { index in
                 Button {
                     withAnimation(.spring(response: 0.30, dampingFraction: 0.9)) {
                         pager.select(index)
                     }
                 } label: {
-                    // 4 pt dot with a 14x12 hit target: a mouse needs something to aim at.
-                    Circle()
-                        .fill(Color.white.opacity(index == selection ? 0.7 : 0.22))
-                        .frame(width: 4, height: 4)
-                        .frame(width: 14, height: 12)
-                        .contentShape(Rectangle())
+                    Group {
+                        if index == selection {
+                            Capsule()
+                                .fill(Color.white.opacity(0.7))
+                                .frame(width: 12, height: 4)
+                        } else {
+                            Circle()
+                                .fill(Color.white.opacity(0.22))
+                                .frame(width: 4, height: 4)
+                        }
+                    }
+                    .frame(width: 14, height: 12)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
