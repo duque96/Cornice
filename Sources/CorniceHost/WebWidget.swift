@@ -102,6 +102,13 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         )
         controller.addUserScript(
             WKUserScript(
+                source: Self.tokenScript,
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true
+            )
+        )
+        controller.addUserScript(
+            WKUserScript(
                 source: Self.styleScript,
                 injectionTime: .atDocumentEnd,
                 forMainFrameOnly: true
@@ -359,6 +366,19 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         window.cornice.language = "\(language.rawValue)";
         window.cornice.locale = "\(language.localeIdentifier)";
         window.cornice.pixelRatio = window.devicePixelRatio || 1;
+        """
+    }
+
+    private static var tokenScript: String {
+        let encoded = (try? JSONEncoder().encode(WidgetTypography.css)) ?? Data("\"\"".utf8)
+        let literal = String(data: encoded, encoding: .utf8) ?? "\"\""
+        return """
+        (function () {
+          const style = document.createElement('style');
+          style.id = 'cornice-tokens';
+          style.textContent = \(literal);
+          (document.head || document.documentElement).appendChild(style);
+        })();
         """
     }
 

@@ -100,6 +100,26 @@ cornice.settings;   // declared settings, already resolved
 cornice.language;   // "en" | "es"
 ```
 
+Widgets inherit one type scale from the host as CSS variables, so every bundle shares the
+same hierarchy instead of picking its own sizes:
+
+| Token | Value | Use |
+|---|---|---|
+| `--cornice-title-size` | 12px / 600 | widget title |
+| `--cornice-label-size` | 10px / 500, 58% ink | metric labels |
+| `--cornice-value-size` | 16px / 600, tabular | numbers |
+| `--cornice-meta-size` | 9.5px / 500, 40% ink | status, footnotes |
+| `--cornice-mono-size` | 9.5px, 42% ink | aligned numbers and addresses only |
+
+`--cornice-font` / `--cornice-mono` resolve to SF Pro and SF Mono, and `--cornice-ink`,
+`--cornice-ink-label`, `--cornice-ink-meta`, `--cornice-ink-mono` are the contrast tiers.
+Mono is reserved for data that lines up (rates, counters, addresses); labels, titles,
+states and prose stay in the text face.
+
+*Options → Panel → UI scale* is the only multiplier: it zooms the page and grows the grid
+cells together. On 1x displays the host also switches `-webkit-font-smoothing` back to
+`auto` (grayscale antialiasing thins strokes) and exposes `cornice.pixelRatio`.
+
 Disk widgets start **disabled** unless the manifest sets `defaultEnabled`. Enable them in
 *Options → Widgets*, where you can also reveal the folder and reload. Bundles shipped inside
 the app are installed on first run and replaced only when their version increases; your own

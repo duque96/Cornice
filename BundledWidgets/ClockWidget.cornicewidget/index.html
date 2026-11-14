@@ -7,9 +7,8 @@
       height: 100%;
       margin: 0;
       background: transparent;
-      color: #ffffff;
-      font-family: -apple-system, system-ui, sans-serif;
-      -webkit-font-smoothing: antialiased;
+      color: var(--cornice-ink, #ffffff);
+      font-family: var(--cornice-font, -apple-system, system-ui, sans-serif);
     }
     .wrap {
       display: flex;
@@ -20,8 +19,8 @@
       padding: 0 2px;
     }
     .time {
-      font-size: 22px;
-      font-weight: 600;
+      font-size: calc(var(--cornice-value-size, 16px) * 1.4);
+      font-weight: var(--cornice-value-weight, 600);
       letter-spacing: 0.4px;
       font-variant-numeric: tabular-nums;
     }
@@ -30,19 +29,15 @@
       line-height: 1.3;
     }
     .day {
-      font-size: 11px;
-      opacity: 0.5;
+      font-size: var(--cornice-label-size, 10px);
+      color: var(--cornice-ink-label, rgba(255, 255, 255, 0.58));
     }
     .zone {
-      font-size: 8px;
+      font-size: var(--cornice-meta-size, 9.5px);
       letter-spacing: 0.6px;
       text-transform: uppercase;
-      opacity: 0.3;
+      color: var(--cornice-ink-meta, rgba(255, 255, 255, 0.4));
     }
-
-    html.cornice-low-dpi .time { font-size: 24px; }
-    html.cornice-low-dpi .day { font-size: 12px; }
-    html.cornice-low-dpi .zone { font-size: 9px; }
   </style>
 </head>
 <body>

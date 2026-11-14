@@ -20,7 +20,7 @@ desde disco, declaran capacidades y nunca tocan el sistema directamente.
 - **Host**: `CorniceHost` — montaje, reloj, capacidades, secretos, loader de disco, UI de ajustes.
 - **Core**: `CorniceCore` — panel, geometría, animación, ajustes, localización.
 
-Estado: M11. 106 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
+Estado: M11. 108 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
 App Store.
 
 > Si una tarea toca el homelab, aplica también `~/.config/opencode/AGENTS.md` y el repo
@@ -84,7 +84,7 @@ Widgets de disco → solo ven el bridge JS, nunca Swift
 
 ```bash
 swift build                      # debug
-swift test                       # 106 tests
+swift test                       # 108 tests
 ./build-app.sh                   # release + dist/Cornice.app (copia BundledWidgets a Resources)
 ./install.sh                     # ~/Applications + LaunchAgent (arranque al login)
 ./uninstall.sh                   # quita app y agente; conserva datos
@@ -322,11 +322,19 @@ permiso de lectura sobre todo el directorio; un symlink podría apuntar a `~/.ss
 `WKWebView` con `websiteDataStore = .nonPersistent()`, navegación confinada al bundle,
 sin Keychain, sin archivos, sin `URLSession`.
 
-**Escala**: `uiScale` multiplica las celdas del grid y se aplica como `pageZoom` al
-webview. Ojo: `pageZoom` puesto antes de `loadFileURL` **se resetea**; se aplica en
-`didFinish`. En pantallas 1x el host añade `html.cornice-low-dpi` y expone
-`cornice.pixelRatio` para que los widgets suban tipografía; también fuerza
-`-webkit-font-smoothing: auto` (el `antialiased` adelgaza en 1x).
+**Escala y tipografía**: `uiScale` multiplica las celdas del grid y se aplica como
+`pageZoom` al webview. Ojo: `pageZoom` puesto antes de `loadFileURL` **se resetea**; se
+aplica en `didFinish`.
+
+El host inyecta una única escala tipográfica como variables CSS (`WidgetTypography`), en
+`:root` **antes** del HTML: título 12/600, etiqueta 10/500 al 58 %, valor 16/600 tabular,
+meta 9,5/500 al 40 %, mono 9,5 al 42 %. Los widgets **no** declaran tamaños propios; mono
+solo para datos alineados (tasas, contadores, IPs). `uiScale` es el único multiplicador.
+
+En pantallas 1x el host añade `html.cornice-low-dpi` (solo para forzar
+`-webkit-font-smoothing: auto`, el `antialiased` adelgaza en 1x) y expone
+`cornice.pixelRatio`. No vuelvas a escalar tipografía por display: se hacía antes y se
+eliminó por dos motivos (dos escalados superpuestos y deriva entre widgets).
 
 **Lockdown de red**: `WidgetContentRules` compila un `WKContentRuleList` que bloquea
 `^https?://`, `^wss?://` y `^ftp://`. Sin él, la página podría usar `fetch`, `<img>` o
@@ -413,7 +421,7 @@ Hay un migrador de credenciales legacy en el host; no documentes de dónde lee.
 swift test
 ```
 
-106 tests. Cobertura por área:
+108 tests. Cobertura por área:
 
 - Geometría del notch y zonas (puro).
 - Máquina de estados del hover.
@@ -428,7 +436,8 @@ swift test
   límite de tamaño de respuesta.
 - Seguridad de rutas: claves de settings sin colisión y IDs duplicados rechazados.
 - Contrato de manifiesto y `HTTPResponse`.
-- Bundled widgets: todos cargan.
+- Bundled widgets: todos cargan y usan los tokens de `WidgetTypography`.
+- Tipografía: tokens del host (`WidgetTypographyTests`).
 - Idioma: translator, persistencia, remontaje.
 
 Snapshots (a `$CORNICE_SNAPSHOT_DIR`): superficie, filmstrip de transición, formulario.
@@ -471,12 +480,13 @@ públicas si contienen widgets personales (§2).
 | La página web se queda con el ancho viejo | devolver el `WKWebView` directo a SwiftUI no reflowea → contenedor con Auto Layout |
 | Un widget no carga y el log dice “content rules unavailable” | falló la compilación del `WKContentRuleList`; se falla cerrado a propósito |
 | Un widget intenta `fetch()` directo y no funciona | correcto: solo `cornice.fetch`; el resto lo bloquea el content rule list |
-| Se ve borroso en un monitor 1x | densidad física (~109 ppi) + tipos pequeños → subir `uiScale` a 1.15–1.25 y usar la clase `cornice-low-dpi` |
+| Se ve borroso en un monitor 1x | densidad física (~109 ppi) → subir `uiScale` a 1.15–1.25; la tipografía ya sale de `WidgetTypography` |
 | El zoom no se aplica | `pageZoom` se resetea al navegar: aplicarlo en `didFinish` |
 | Un bundle se rechaza por “link or special file” | contiene un symlink; WebKit tendría lectura fuera del bundle |
 | Tailscale deja de responder tras mover el binario | solo se ejecutan binarios root/usuario sin escritura de grupo; revisa owner y permisos |
 | El swipe va al revés | doble inversión de `scrollingDeltaX`: el offset usa el mismo signo que el delta |
 | Cambias un HTML y no se ve | no subiste `version` en el manifest |
+| Un widget no hereda los tamaños | usa `var(--cornice-*)`; los tokens se inyectan en `:root` antes del HTML |
 
 ---
 
@@ -491,9 +501,10 @@ públicas si contienen widgets personales (§2).
 5. Usa `cornice.settings` para opciones y `cornice.language` para textos.
 6. No metas el contenido en una tarjeta: el fondo es el panel.
 7. Sube la versión si ya existía.
-8. `swift test` (el test de bundles lo carga) y captura local con `scripts/screenshot.sh`.
-9. **No** lo documentes en `README.md` si es personal (§2). Si es genérico, añade una sección
-   y actualiza este archivo si cambia el contrato.
+8. Usa los tokens `var(--cornice-*)`; no declares `font-size` propios ni escales por display.
+9. `swift test` (el test de bundles lo carga) y captura local con `scripts/screenshot.sh`.
+10. **No** lo documentes en `README.md` si es personal (§2). Si es genérico, añade una sección
+    y actualiza este archivo si cambia el contrato.
 
 ---
 

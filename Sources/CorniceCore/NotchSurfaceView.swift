@@ -90,7 +90,8 @@ struct NotchSurfaceView: View {
     private var header: some View {
         HStack(spacing: 8) {
             Text("Cornice")
-                .font(.system(size: 12 * model.uiScale, weight: .semibold, design: .rounded))
+                .font(.system(size: 12.5 * model.uiScale, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.95))
 
             Spacer(minLength: 0)
 
@@ -98,7 +99,7 @@ struct NotchSurfaceView: View {
                 model.onOpenSettings?()
             } label: {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: 10 * model.uiScale, weight: .semibold))
+                    .font(.system(size: 11 * model.uiScale, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.4))
             }
             .buttonStyle(.plain)
