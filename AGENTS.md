@@ -267,6 +267,13 @@ que devuelve `.unavailable`). El CLI puede salir con código 0 y texto en vez de
 se reporta como `.commandFailed` y el widget distingue “CLI no disponible” de
 “Tailscale no responde”.
 
+**El CLI se lanza a través de `/usr/bin/osascript` (`do shell script`)**, no con `Process`
+directo. Un hijo directo de un LaunchAgent se queda colgado en
+`LSSetApplicationInformationItem` (LaunchServices) al intentar hablar con la GUI de
+Tailscale: `tailscale status` funciona en Terminal pero el widget dice “no responde”. Con
+`do shell script` el comando corre en un contexto donde LaunchServices responde. No lo
+“simplifiques” a `Process`: ya se probó y se cuelga.
+
 `WidgetContext`: `http`, `secrets`, `settings`, `language`, `tailscale`, `log`,
 `availableWidth`, `capabilities`.
 
@@ -504,6 +511,7 @@ públicas si contienen widgets personales (§2).
 | Un bundle se rechaza por “link or special file” | contiene un symlink; WebKit tendría lectura fuera del bundle |
 | Tailscale deja de responder tras mover el binario | solo se ejecutan binarios root/usuario sin escritura de grupo; revisa owner y permisos |
 | “CLI de Tailscale no disponible” con el CLI funcionando | stderr mezclado con el JSON, binario cacheado en `init` o un CLI colgado que atasca el canal GUI↔extensión; el host ya separa salidas, resuelve por llamada y mata el proceso a los 6 s. Si persiste, reinicia Tailscale (el CLI desde Terminal debe devolver JSON) |
+| `tailscale status` funciona en Terminal pero el widget dice “no responde” | el hijo directo de un LaunchAgent se cuelga en LaunchServices; el host lo ejecuta vía `osascript` + `do shell script` |
 | El swipe va al revés | doble inversión de `scrollingDeltaX`: el offset usa el mismo signo que el delta |
 | La rueda del ratón no pagina | `phase == .none` siempre es false (OptionSet vs Optional); usa `phase.isEmpty` |
 | La rueda salta varias páginas | el ratón emite varios eventos por notch: acumula y aplica `WheelPagingState` |

@@ -123,6 +123,21 @@ public struct SystemTailscale: TailscaleControlling {
 
     // MARK: - Process
 
+    /// `do shell script` needs the command as an AppleScript string literal.
+    static func appleScript(for binary: URL, arguments: [String]) -> String {
+        let command = ([binary.path] + arguments)
+            .map(shellQuoted)
+            .joined(separator: " ")
+        let escaped = command
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return "do shell script \"\(escaped)\""
+    }
+
+    static func shellQuoted(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
     private func run(_ arguments: [String], timeout: TimeInterval) async -> Result<String, TailscaleError> {
         guard let binary = resolveBinary() else { return .failure(.unavailable) }
 
@@ -149,9 +164,12 @@ public struct SystemTailscale: TailscaleControlling {
                     return
                 }
 
+                // Run through osascript: a direct child of a LaunchAgent stalls
+                // inside LaunchServices when the CLI tries to reach its GUI,
+                // while `do shell script` executes in a working context.
                 let process = Process()
-                process.executableURL = binary
-                process.arguments = arguments
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+                process.arguments = ["-e", SystemTailscale.appleScript(for: binary, arguments: arguments)]
                 process.standardOutput = outputHandle
                 process.standardError = errorHandle
 
