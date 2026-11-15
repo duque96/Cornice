@@ -64,6 +64,31 @@ public extension TailscaleControlling {
     }
 }
 
+
+// MARK: - Storage
+
+public struct StorageStatus: Codable, Sendable, Equatable {
+    public let totalBytes: Int64
+    public let freeBytes: Int64
+    public let usedBytes: Int64
+    /// Space the cleaner could free with the recommended categories.
+    public let recoverableBytes: Int64
+
+    public init(totalBytes: Int64, freeBytes: Int64, usedBytes: Int64, recoverableBytes: Int64) {
+        self.totalBytes = totalBytes
+        self.freeBytes = freeBytes
+        self.usedBytes = usedBytes
+        self.recoverableBytes = recoverableBytes
+    }
+}
+
+public protocol StorageControlling: Sendable {
+    /// Volume capacity plus a cached estimate of reclaimable cache space.
+    func status() async -> StorageStatus?
+    /// Opens the native review window. The widget never deletes anything.
+    func review() async
+}
+
 public struct WidgetLog: Sendable {
     public let subsystem: String
 
@@ -93,6 +118,8 @@ public struct WidgetContext {
     public let language: WidgetLanguage
     /// `nil` when the widget did not declare `.tailscale`.
     public let tailscale: (any TailscaleControlling)?
+    /// `nil` when the widget did not declare `.storage`.
+    public let storage: (any StorageControlling)?
     public let log: WidgetLog
     /// Panel width the host is giving the stage, so widgets can size themselves.
     public let availableWidth: CGFloat
@@ -105,6 +132,7 @@ public struct WidgetContext {
         uiScale: CGFloat,
         language: WidgetLanguage,
         tailscale: (any TailscaleControlling)?,
+        storage: (any StorageControlling)?,
         log: WidgetLog,
         availableWidth: CGFloat
     ) {
@@ -115,6 +143,7 @@ public struct WidgetContext {
         self.uiScale = uiScale
         self.language = language
         self.tailscale = tailscale
+        self.storage = storage
         self.log = log
         self.availableWidth = availableWidth
     }

@@ -20,7 +20,7 @@ desde disco, declaran capacidades y nunca tocan el sistema directamente.
 - **Host**: `CorniceHost` — montaje, reloj, capacidades, secretos, loader de disco, UI de ajustes.
 - **Core**: `CorniceCore` — panel, geometría, animación, ajustes, localización.
 
-Estado: M11. 114 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
+Estado: M11. 123 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
 App Store.
 
 > Si una tarea toca el homelab, aplica también `~/.config/opencode/AGENTS.md` y el repo
@@ -84,7 +84,7 @@ Widgets de disco → solo ven el bridge JS, nunca Swift
 
 ```bash
 swift build                      # debug
-swift test                       # 108 tests
+swift test                       # 123 tests
 ./build-app.sh                   # release + dist/Cornice.app (copia BundledWidgets a Resources)
 ./install.sh                     # ~/Applications + LaunchAgent (arranque al login)
 ./uninstall.sh                   # quita app y agente; conserva datos
@@ -237,7 +237,7 @@ WidgetManifest(id:name:version:apiVersion:capabilities:networkHosts:keychainServ
 
 - `apiVersion` debe ser `1`; el host rechaza manifests con `problems`.
 - `Capability`: `.network`, `.keychain`, `.files`, `.calendar`, `.media`, `.notifications`,
-  `.tailscale`. **Solo se aplican network, keychain y tailscale.**
+  `.tailscale`, `.storage`. **Solo se aplican network, keychain, tailscale y storage.**
 - `.network` exige `networkHosts` (hosts o IPs; acepta subdominios). Respuestas limitadas a
   2 MB (`maxResponseBytes`) y leídas en streaming.
 - `.keychain` exige `keychainServices`; el host entrega `ScopedSecrets`.
@@ -383,10 +383,30 @@ cornice.language;   // "en" | "es"
 cornice.locale;     // "en_GB" | "es_ES"
 await cornice.tailscale.status();
 await cornice.tailscale.set(true);
+await cornice.storage.status();   // totalBytes, freeBytes, usedBytes, recoverableBytes
+await cornice.storage.review();   // abre la ventana nativa de revisión
 ```
 
 El `fetch` pasa por `WidgetHTTPClient` (allow-list + 30 req/min + credenciales inyectadas).
 Un widget **nunca** debe hablar con el sistema por su cuenta.
+
+### Almacenamiento
+
+`SystemStorage` (actor) expone la capability `.storage`. El SDK solo permite
+`status()` (capacidad + recuperable cacheado 60 s) y `review()`, que publica
+`.corniceShowStorage`; `AppDelegate` abre `StorageWindowController` (también accesible desde
+Opciones → Almacenamiento y el menú de barra).
+
+`StorageCatalog` define raíces **fijas** bajo el home: cachés de apps/Apple, logs,
+DerivedData, iOS DeviceSupport, cachés de simulador, npm/Cargo/Gradle/Maven, cachés de
+contenedores, Papelera y copias de iPhone. `StorageScanner` mide con `/usr/bin/du -sk`
+(lectura, sin shell) y `StorageCleaner` borra hijos de esas raíces con FileManager, sin
+seguir symlinks y comprobando contención. La ventana separa recomendado/avanzado; Papelera y
+copias son opt-in y piden confirmación. Nunca toca Documentos, Fotos, Mail, Application
+Support, datos de contenedores, `/Library/Caches` ni snapshots de Time Machine. La pestaña
+Analizar lista archivos grandes y descargas antiguas y solo los mueve a la Papelera.
+
+Debug: `CORNICE_START_STORAGE=1` abre la ventana al arrancar.
 
 `WebWidgetView` envuelve el `WKWebView` en un `NSView` con Auto Layout: devolverlo directo a
 SwiftUI no reflowea la página al cambiar el tamaño de la celda.
@@ -446,7 +466,7 @@ Hay un migrador de credenciales legacy en el host; no documentes de dónde lee.
 swift test
 ```
 
-114 tests. Cobertura por área:
+123 tests. Cobertura por área:
 
 - Geometría del notch y zonas (puro).
 - Máquina de estados del hover.
@@ -464,6 +484,8 @@ swift test
 - Contrato de manifiesto y `HTTPResponse`.
 - Bundled widgets: todos cargan y usan los tokens de `WidgetTypography`.
 - Tipografía: tokens del host (`WidgetTypographyTests`).
+- Almacenamiento: filtros de categorías, contención y borrado en directorios temporales
+  (`StorageTests`).
 - Idioma: translator, persistencia, remontaje.
 
 Snapshots (a `$CORNICE_SNAPSHOT_DIR`): superficie, filmstrip de transición, formulario.
@@ -516,6 +538,8 @@ públicas si contienen widgets personales (§2).
 | La rueda del ratón no pagina | `phase == .none` siempre es false (OptionSet vs Optional); usa `phase.isEmpty` |
 | La rueda salta varias páginas | el ratón emite varios eventos por notch: acumula y aplica `WheelPagingState` |
 | Cambias un HTML y no se ve | no subiste `version` en el manifest |
+| La ventana de almacenamiento tarda en abrir | el primer escaneo mide las cachés con `du`; capacidad y recomendados salen antes que avanzados |
+| Un widget de almacenamiento no puede borrar | correcto: `.storage` solo da `status`/`review`; el borrado es nativo y confirmado |
 | Un widget no hereda los tamaños | usa `var(--cornice-*)`; los tokens se inyectan en `:root` antes del HTML |
 
 ---

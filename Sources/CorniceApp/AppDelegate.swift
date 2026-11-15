@@ -7,6 +7,9 @@ import CorniceHost
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var controller: NotchSurfaceController?
     private var settingsWindow: SettingsWindowController?
+    private var storageWindow: StorageWindowController?
+    private var storage: SystemStorage?
+    private var storageObserver: NSObjectProtocol?
     private var widgetHost: WidgetHost?
     private var settingsStore: SettingsStore?
     private var statusItem: NSStatusItem?
@@ -24,6 +27,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let settings = SettingsStore()
         settingsStore = settings
         currentLanguage = settings.settings.language
+        let storage = SystemStorage()
+        self.storage = storage
         let pager = StagePager()
         let controller = NotchSurfaceController(
             settings: settings,
@@ -38,7 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             WidgetInstaller.installBundledWidgets(from: bundled, into: WidgetPaths.widgetsDirectory)
         }
 
-        let host = WidgetHost(factories: [])
+        let host = WidgetHost(factories: [], storage: storage)
         host.setLanguage(settings.settings.language)
         host.setUIScale(settings.settings.uiScale)
         widgetHost = host
@@ -56,6 +61,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Start after wiring: mounting triggers the first fit-to-content pass.
         host.start()
+
+        storageObserver = NotificationCenter.default.addObserver(
+            forName: .corniceShowStorage,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.showStorage()
+            }
+        }
 
         settings.onChange = { [weak self, weak controller] in
             controller?.applySettings()
@@ -96,6 +111,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if ProcessInfo.processInfo.environment["CORNICE_START_SETTINGS"] == "1" {
             openSettings()
+        }
+
+        if ProcessInfo.processInfo.environment["CORNICE_START_STORAGE"] == "1" {
+            showStorage()
         }
     }
 
@@ -164,6 +183,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         options.target = self
         menu.addItem(options)
 
+        let storageItem = NSMenuItem(
+            title: t("Storage…", "Almacenamiento…"),
+            action: #selector(showStorage),
+            keyEquivalent: ""
+        )
+        storageItem.target = self
+        menu.addItem(storageItem)
+
         menu.addItem(.separator())
 
         let quit = NSMenuItem(
@@ -213,6 +240,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         guard let host else { return sections }
 
+        if let storage {
+            sections.append(
+                SettingsSection(
+                    id: "storage",
+                    title: t("Storage", "Almacenamiento"),
+                    systemImage: "internaldrive",
+                    content: AnyView(
+                        StorageSettingsView(
+                            storage: storage,
+                            language: settings.settings.language
+                        ) { [weak self] in
+                            self?.showStorage()
+                        }
+                    )
+                )
+            )
+        }
+
         sections.append(
             SettingsSection(
                 id: "layout",
@@ -252,6 +297,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openSettings() {
         settingsWindow?.show()
+    }
+
+    @objc private func showStorage() {
+        guard let storage else { return }
+        if storageWindow == nil {
+            storageWindow = StorageWindowController(storage: storage)
+        }
+        storageWindow?.show(language: settingsStore?.settings.language ?? .system)
     }
 
     @objc private func toggleSurface() {

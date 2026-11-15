@@ -49,6 +49,9 @@ public enum Capability: String, Codable, Sendable, CaseIterable {
     /// Connect and disconnect Tailscale. Privileged: grants command execution
     /// through the host, scoped to the `tailscale` CLI.
     case tailscale
+    /// Read volume capacity and open the host's storage review window. The
+    /// widget cannot delete files itself.
+    case storage
 }
 
 // MARK: - Layout

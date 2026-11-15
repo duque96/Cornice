@@ -100,6 +100,14 @@ cornice.settings;   // declared settings, already resolved
 cornice.language;   // "en" | "es"
 ```
 
+Privileged helpers are also available, capability-gated:
+
+```js
+await cornice.tailscale.status();
+await cornice.storage.status(); // { totalBytes, freeBytes, usedBytes, recoverableBytes }
+await cornice.storage.review(); // opens the native review window; the widget never deletes
+```
+
 Widgets inherit one type scale from the host as CSS variables, so every bundle shares the
 same hierarchy instead of picking its own sizes:
 
@@ -160,6 +168,8 @@ A widget declares what it needs; the host decides what it actually gets.
 |---|---|---|
 | `.network` | `WidgetContext.http` / `cornice.fetch` | host allow-list (`networkHosts`, exact host or subdomain) and 30 requests/minute |
 | `.keychain` | `WidgetContext.secrets` | scoped to `keychainServices`; other services return `nil` |
+| `.tailscale` | `WidgetContext.tailscale` / `cornice.tailscale` | fixed `status` / `up` / `down`, trusted binary |
+| `.storage` | `WidgetContext.storage` / `cornice.storage` | read-only capacity plus a request to open the review window; deletion is native and confirmed |
 | credentials | `Authorization` (or the declared header) | exact host only (subdomains do not inherit it), declared service and account; the secret never reaches JS |
 
 No capability means no object: `context.http` and `context.secrets` are `nil`, and the
@@ -172,6 +182,21 @@ cookies, no cache).
 
 Privileged integrations (device or service control) are separate capabilities, each with a
 fixed command surface mediated by the host — never a shell.
+
+## Storage
+
+*Options → Storage* (or *Storage…* in the menu bar) opens the review window. It shows the
+boot volume, then a recommended set (third-party caches, logs, Xcode DerivedData) and an
+advanced set (Apple caches, iOS DeviceSupport, simulator, development and sandboxed-app
+caches, Trash and local device backups). Nothing is deleted until categories are ticked and
+the action is confirmed; a widget can only read capacity and ask the host to open this
+window.
+
+Sizes are measured with `/usr/bin/du -sk`. Deletion is native and restricted to hardcoded
+roots under the user's home. Documents, Photos, Mail, Application Support, container data,
+`/Library` caches and Time Machine snapshots are never touched. The Analyze tab lists large
+files and old downloads and only moves them to the Trash. Local Time Machine snapshots are
+reported for information; deleting them requires an administrator.
 
 ## Localization
 
@@ -195,6 +220,7 @@ A sidebar, one page per section, applied live:
 | **Motion** | open/close spring, content fade delay and duration |
 | **Interaction** | hover open/close delays |
 | **Panel** | width, height, fit to content, UI scale, restore defaults |
+| **Storage** | capacity, recommended and advanced cleanup, large-file analysis |
 | **Layout** | visual grid editor: drag a corner to resize, reset sizes |
 | **Widgets** | gallery: enable/disable, drag to reorder, source, capabilities, open folder, reload |
 | **<widget name>** | one page per widget that declares settings |

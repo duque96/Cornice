@@ -64,6 +64,7 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
     private let language: WidgetLanguage
     private let uiScale: CGFloat
     private let tailscale: (any TailscaleControlling)?
+    private let storage: (any StorageControlling)?
     private let log: WidgetLog
 
     init(bundle: DiskWidget, context: WidgetContext) {
@@ -73,6 +74,7 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         self.language = context.language
         self.uiScale = context.uiScale
         self.tailscale = context.tailscale
+        self.storage = context.storage
         self.log = context.log
 
         let configuration = WKWebViewConfiguration()
@@ -195,6 +197,10 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
             handleTailscaleStatus(id: id)
         case "tailscale.set":
             handleTailscaleSet(id: id, enabled: params["enabled"] as? Bool ?? false)
+        case "storage.status":
+            handleStorageStatus(id: id)
+        case "storage.review":
+            handleStorageReview(id: id)
         default:
             respond(id: id, payload: ["ok": false, "error": "Unknown method '\(method)'"])
         }
@@ -281,6 +287,44 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         }
     }
 
+    private func handleStorageStatus(id: Int) {
+        guard let storage else {
+            respond(id: id, payload: ["ok": false, "error": "Storage not permitted"])
+            return
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
+            guard let status = await storage.status() else {
+                self.log.warn("storage status unavailable")
+                self.respond(id: id, payload: ["ok": false, "error": "Storage unavailable"])
+                return
+            }
+
+            self.respond(id: id, payload: [
+                "ok": true,
+                "status": [
+                    "totalBytes": status.totalBytes,
+                    "freeBytes": status.freeBytes,
+                    "usedBytes": status.usedBytes,
+                    "recoverableBytes": status.recoverableBytes,
+                ],
+            ])
+        }
+    }
+
+    private func handleStorageReview(id: Int) {
+        guard let storage else {
+            respond(id: id, payload: ["ok": false, "error": "Storage not permitted"])
+            return
+        }
+
+        Task { [weak self] in
+            await storage.review()
+            self?.respond(id: id, payload: ["ok": true])
+        }
+    }
+
     private func respond(id: Int, payload: [String: Any]) {
         webView.callAsyncJavaScript(
             "window.__corniceResolve(id, payload)",
@@ -313,6 +357,10 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         tailscale: {
           status: function () { return request('tailscale.status', {}); },
           set: function (enabled) { return request('tailscale.set', { enabled: !!enabled }); }
+        },
+        storage: {
+          status: function () { return request('storage.status', {}); },
+          review: function () { return request('storage.review', {}); }
         },
         fetch(url, options) {
           options = options || {};

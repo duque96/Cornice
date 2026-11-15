@@ -66,6 +66,7 @@ public final class WidgetHost {
     private let widgetsDirectory: URL
     private let preferences: WidgetPreferencesStore
     private let tailscale: any TailscaleControlling
+    private let storage: any StorageControlling
     public let settingsStore: WidgetSettingsStore
     private let log = WidgetLog(subsystem: "host")
 
@@ -81,7 +82,8 @@ public final class WidgetHost {
         widgetsDirectory: URL = WidgetPaths.widgetsDirectory,
         preferences: WidgetPreferencesStore? = nil,
         settingsStore: WidgetSettingsStore? = nil,
-        tailscale: any TailscaleControlling = SystemTailscale()
+        tailscale: any TailscaleControlling = SystemTailscale(),
+        storage: any StorageControlling = SystemStorage()
     ) {
         self.builtInFactories = factories
         self.secretStore = secretStore
@@ -90,6 +92,7 @@ public final class WidgetHost {
         self.preferences = preferences ?? WidgetPreferencesStore()
         self.settingsStore = settingsStore ?? WidgetSettingsStore()
         self.tailscale = tailscale
+        self.storage = storage
     }
 
     // MARK: - Discovery
@@ -375,6 +378,7 @@ public final class WidgetHost {
             uiScale: CGFloat(uiScale),
             language: WidgetLanguage(rawValue: language.resolved.rawValue) ?? .en,
             tailscale: manifest.capabilities.contains(.tailscale) ? tailscale : nil,
+            storage: manifest.capabilities.contains(.storage) ? storage : nil,
             log: widgetLog,
             availableWidth: stageWidth
         )
