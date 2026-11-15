@@ -94,6 +94,14 @@ public final class NotchSurfaceController {
         observeSpaceChanges()
 
         isVisible = true
+
+        if let raw = ProcessInfo.processInfo.environment["CORNICE_START_PAGE"],
+           let page = Int(raw) {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(2))
+                self?.pager.select(page)
+            }
+        }
     }
 
     public func stop() {

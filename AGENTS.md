@@ -114,6 +114,8 @@ Reiniciar sin reinstalar: `launchctl kickstart -k gui/$(id -u)/com.duque.cornice
 | `CORNICE_SIMULATE=1` | Notch simulado (pantallas sin notch) |
 | `CORNICE_START_OPEN=1` | **Pinea** la superficie (revisión de diseño); se desancla al parar |
 | `CORNICE_START_SETTINGS=1` | Abre Opciones al arrancar |
+| `CORNICE_START_STORAGE=1` | Abre la ventana de Almacenamiento al arrancar |
+| `CORNICE_START_PAGE=N` | Selecciona la página N al arrancar (QA de composición) |
 
 Logs de producción: `~/Library/Logs/Cornice/{out,err}.log`.
 
