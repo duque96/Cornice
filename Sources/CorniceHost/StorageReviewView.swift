@@ -105,7 +105,7 @@ final class StorageReviewModel {
         }
         status = await storage.status()
 
-        let recommended = await storage.scanRecommended()
+        let recommended = await storage.scanRecommended(force: true)
         rows = makeRows(recommended)
         isLoading = false
 
@@ -128,7 +128,7 @@ final class StorageReviewModel {
     }
 
     private func loadAdvanced(generation: Int) async {
-        let advanced = await storage.scanAdvanced()
+        let advanced = await storage.scanAdvanced(force: true)
         guard generation == advancedGeneration else { return }
 
         let existing = Set(rows.map(\.id))

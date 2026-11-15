@@ -50,8 +50,8 @@ public actor SystemStorage: StorageControlling {
 
     // MARK: - Review window
 
-    func scanRecommended() async -> [StorageCategorySize] {
-        if let cached = cachedRecommended, Date().timeIntervalSince(cached.date) < 300 {
+    func scanRecommended(force: Bool = false) async -> [StorageCategorySize] {
+        if !force, let cached = cachedRecommended, Date().timeIntervalSince(cached.date) < 600 {
             return cached.sizes
         }
         let sizes = StorageCatalog.cleanable
@@ -61,8 +61,8 @@ public actor SystemStorage: StorageControlling {
         return sizes
     }
 
-    func scanAdvanced() async -> [StorageCategorySize] {
-        if let cached = cachedAdvanced, Date().timeIntervalSince(cached.date) < 300 {
+    func scanAdvanced(force: Bool = false) async -> [StorageCategorySize] {
+        if !force, let cached = cachedAdvanced, Date().timeIntervalSince(cached.date) < 600 {
             return cached.sizes
         }
         let sizes = StorageCatalog.cleanable
@@ -73,7 +73,7 @@ public actor SystemStorage: StorageControlling {
     }
 
     func scanAll() async -> [StorageCategorySize] {
-        await scanRecommended() + scanAdvanced()
+        await scanRecommended(force: true) + scanAdvanced(force: true)
     }
 
     func clean(ids: Set<String>) async -> StorageCleanResult {
