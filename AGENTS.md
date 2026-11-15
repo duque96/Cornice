@@ -393,7 +393,7 @@ Un widget **nunca** debe hablar con el sistema por su cuenta.
 ### Almacenamiento
 
 `SystemStorage` (actor) expone la capability `.storage`. El SDK solo permite
-`status()` (capacidad + recuperable cacheado 60 s) y `review()`, que publica
+`status()` (capacidad + recuperable cacheado 5 min) y `review()`, que publica
 `.corniceShowStorage`; `AppDelegate` abre `StorageWindowController` (también accesible desde
 Opciones → Almacenamiento y el menú de barra).
 
