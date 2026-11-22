@@ -52,6 +52,9 @@ public enum Capability: String, Codable, Sendable, CaseIterable {
     /// Read volume capacity and open the host's storage review window. The
     /// widget cannot delete files itself.
     case storage
+    /// Run the system's network quality test. Privileged: reaches the network
+    /// through the host with fixed flags, never with an arbitrary command.
+    case speedtest
 }
 
 // MARK: - Layout

@@ -65,6 +65,7 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
     private let uiScale: CGFloat
     private let tailscale: (any TailscaleControlling)?
     private let storage: (any StorageControlling)?
+    private let speedtest: (any SpeedTestControlling)?
     private let log: WidgetLog
 
     init(bundle: DiskWidget, context: WidgetContext) {
@@ -75,6 +76,7 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         self.uiScale = context.uiScale
         self.tailscale = context.tailscale
         self.storage = context.storage
+        self.speedtest = context.speedtest
         self.log = context.log
 
         let configuration = WKWebViewConfiguration()
@@ -201,6 +203,12 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
             handleStorageStatus(id: id)
         case "storage.review":
             handleStorageReview(id: id)
+        case "speedtest.run":
+            handleSpeedTestRun(id: id, params: params)
+        case "speedtest.last":
+            handleSpeedTestLast(id: id)
+        case "speedtest.cancel":
+            handleSpeedTestCancel(id: id)
         default:
             respond(id: id, payload: ["ok": false, "error": "Unknown method '\(method)'"])
         }
@@ -325,6 +333,89 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
         }
     }
 
+    // MARK: Speed test
+
+    private func handleSpeedTestRun(id: Int, params: [String: Any]) {
+        guard let speedtest else {
+            respond(id: id, payload: ["ok": false, "error": "Speed test not permitted"])
+            return
+        }
+
+        let duration = (params["duration"] as? NSNumber)?.doubleValue ?? 8
+        let progress: @Sendable (SpeedTestProgress) -> Void = { [weak self] event in
+            Task { @MainActor in
+                self?.pushSpeedTestProgress(event)
+            }
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
+
+            switch await speedtest.run(duration: duration, progress: progress) {
+            case .success(let report):
+                self.log.warn("speed test done \(Int(report.download?.megabitsPerSecond ?? 0)) / \(Int(report.upload?.megabitsPerSecond ?? 0)) Mbps")
+                self.respond(id: id, payload: ["ok": true, "status": self.jsonObject(report) ?? [:]])
+            case .failure(let error):
+                let message = error.errorDescription ?? "Speed test failed"
+                self.log.warn("speed test failed: \(message)")
+                self.respond(id: id, payload: ["ok": false, "error": message])
+            }
+        }
+    }
+
+    private func handleSpeedTestLast(id: Int) {
+        guard let speedtest else {
+            respond(id: id, payload: ["ok": false, "error": "Speed test not permitted"])
+            return
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
+            let report = await speedtest.last()
+            let status: Any = report.map { self.jsonObject($0) ?? NSNull() } ?? NSNull()
+            self.respond(id: id, payload: ["ok": true, "status": status])
+        }
+    }
+
+    private func handleSpeedTestCancel(id: Int) {
+        guard let speedtest else {
+            respond(id: id, payload: ["ok": false, "error": "Speed test not permitted"])
+            return
+        }
+
+        Task { [weak self] in
+            await speedtest.cancel()
+            self?.respond(id: id, payload: ["ok": true])
+        }
+    }
+
+    private func pushSpeedTestProgress(_ event: SpeedTestProgress) {
+        let payload: [String: Any]
+        switch event {
+        case .phase(let phase):
+            payload = ["phase": phase.rawValue]
+        case .measured(let measurement):
+            payload = [
+                "phase": measurement.phase.rawValue,
+                "measurement": jsonObject(measurement) ?? [:],
+            ]
+        }
+
+        webView.callAsyncJavaScript(
+            "window.__corniceSpeedTestProgress(payload)",
+            arguments: ["payload": payload],
+            in: nil,
+            in: .page
+        ) { _ in }
+    }
+
+    private func jsonObject<T: Encodable>(_ value: T) -> Any? {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(value) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data)
+    }
+
     private func respond(id: Int, payload: [String: Any]) {
         webView.callAsyncJavaScript(
             "window.__corniceResolve(id, payload)",
@@ -362,6 +453,14 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
           status: function () { return request('storage.status', {}); },
           review: function () { return request('storage.review', {}); }
         },
+        speedtest: {
+          run: function (duration) {
+            return request('speedtest.run', { duration: Number(duration) || 8 });
+          },
+          last: function () { return request('speedtest.last', {}); },
+          cancel: function () { return request('speedtest.cancel', {}); },
+          onProgress: function (callback) { window.__corniceSpeedTestCallback = callback; }
+        },
         fetch(url, options) {
           options = options || {};
           return new Promise((resolve, reject) => {
@@ -397,6 +496,12 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
       window.__corniceTick = function (ts) {
         if (typeof window.__corniceTickCallback === 'function') {
           window.__corniceTickCallback(ts);
+        }
+      };
+
+      window.__corniceSpeedTestProgress = function (payload) {
+        if (typeof window.__corniceSpeedTestCallback === 'function') {
+          window.__corniceSpeedTestCallback(payload);
         }
       };
     })();

@@ -67,6 +67,7 @@ public final class WidgetHost {
     private let preferences: WidgetPreferencesStore
     private let tailscale: any TailscaleControlling
     private let storage: any StorageControlling
+    private let speedtest: any SpeedTestControlling
     public let settingsStore: WidgetSettingsStore
     private let log = WidgetLog(subsystem: "host")
 
@@ -83,7 +84,8 @@ public final class WidgetHost {
         preferences: WidgetPreferencesStore? = nil,
         settingsStore: WidgetSettingsStore? = nil,
         tailscale: any TailscaleControlling = SystemTailscale(),
-        storage: any StorageControlling = SystemStorage()
+        storage: any StorageControlling = SystemStorage(),
+        speedtest: any SpeedTestControlling = SystemSpeedTest()
     ) {
         self.builtInFactories = factories
         self.secretStore = secretStore
@@ -93,6 +95,7 @@ public final class WidgetHost {
         self.settingsStore = settingsStore ?? WidgetSettingsStore()
         self.tailscale = tailscale
         self.storage = storage
+        self.speedtest = speedtest
     }
 
     // MARK: - Discovery
@@ -379,6 +382,7 @@ public final class WidgetHost {
             language: WidgetLanguage(rawValue: language.resolved.rawValue) ?? .en,
             tailscale: manifest.capabilities.contains(.tailscale) ? tailscale : nil,
             storage: manifest.capabilities.contains(.storage) ? storage : nil,
+            speedtest: manifest.capabilities.contains(.speedtest) ? speedtest : nil,
             log: widgetLog,
             availableWidth: stageWidth
         )

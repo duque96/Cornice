@@ -20,7 +20,7 @@ desde disco, declaran capacidades y nunca tocan el sistema directamente.
 - **Host**: `CorniceHost` — montaje, reloj, capacidades, secretos, loader de disco, UI de ajustes.
 - **Core**: `CorniceCore` — panel, geometría, animación, ajustes, localización.
 
-Estado: M11. 123 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
+Estado: M11. 136 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
 App Store.
 
 > Si una tarea toca el homelab, aplica también `~/.config/opencode/AGENTS.md` y el repo
@@ -84,7 +84,7 @@ Widgets de disco → solo ven el bridge JS, nunca Swift
 
 ```bash
 swift build                      # debug
-swift test                       # 123 tests
+swift test                       # 136 tests
 ./build-app.sh                   # release + dist/Cornice.app (copia BundledWidgets a Resources)
 ./install.sh                     # ~/Applications + LaunchAgent (arranque al login)
 ./uninstall.sh                   # quita app y agente; conserva datos
@@ -239,7 +239,8 @@ WidgetManifest(id:name:version:apiVersion:capabilities:networkHosts:keychainServ
 
 - `apiVersion` debe ser `1`; el host rechaza manifests con `problems`.
 - `Capability`: `.network`, `.keychain`, `.files`, `.calendar`, `.media`, `.notifications`,
-  `.tailscale`, `.storage`. **Solo se aplican network, keychain, tailscale y storage.**
+  `.tailscale`, `.storage`, `.speedtest`. **Solo se aplican network, keychain, tailscale,
+  storage y speedtest.**
 - `.network` exige `networkHosts` (hosts o IPs; acepta subdominios). Respuestas limitadas a
   2 MB (`maxResponseBytes`) y leídas en streaming.
 - `.keychain` exige `keychainServices`; el host entrega `ScopedSecrets`.
@@ -251,6 +252,9 @@ WidgetManifest(id:name:version:apiVersion:capabilities:networkHosts:keychainServ
 - `.tailscale`: `WidgetContext.tailscale` + `cornice.tailscale.status()` /
   `cornice.tailscale.set(bool)`. El host expone **solo** `status`, `up` y `down` del CLI
   (`SystemTailscale`), con timeout; nunca un shell.
+- `.speedtest`: `WidgetContext.speedtest` + `cornice.speedtest.run(segundos)` /
+  `last()` / `cancel()` / `onProgress(cb)`. Un solo binario (`/usr/bin/networkQuality`) con
+  flags fijos; la duración la clampa el host (3–30 s por fase).
 
 `SystemTailscale` solo ejecuta binarios **de confianza**: owner root o el usuario actual y
 sin permiso de escritura para grupo/otros. Prefiere el binario de la app (`/Applications/…`)
@@ -276,8 +280,17 @@ Tailscale: `tailscale status` funciona en Terminal pero el widget dice “no res
 `do shell script` el comando corre en un contexto donde LaunchServices responde. No lo
 “simplifiques” a `Process`: ya se probó y se cuelga.
 
-`WidgetContext`: `http`, `secrets`, `settings`, `language`, `tailscale`, `log`,
-`availableWidth`, `capabilities`.
+`SystemSpeedTest` ejecuta `/usr/bin/networkQuality` en **dos procesos**, uno por dirección:
+`-u` significa “no subas” (solo descarga) y `-d` “no bajes” (solo subida); los flags están
+invertidos respecto al nombre. Se hace así para poder pintar la bajada mientras corre la
+subida. La duración se clampa a 3–30 s por fase, solo hay una prueba a la vez (`.busy`) y
+`cancel()` mata el proceso. El binario pasa por el mismo chequeo `TrustedExecutable` que el
+CLI de Tailscale. El último informe se guarda en `speedtest.json`: el webview es efímero y
+sin eso el widget perdería las cifras al remontarse. La salida va a archivos temporales
+(el JSON lleva arrays de muestras y llenaría un pipe).
+
+`WidgetContext`: `http`, `secrets`, `settings`, `language`, `tailscale`, `storage`,
+`speedtest`, `log`, `availableWidth`, `capabilities`.
 
 `CorniceWidget`: `makeView()`, `activate()`, `deactivate()`, `tick(Date)`.
 `WidgetFactory`: `manifest` + `make(context:)` (instancia, no estático, para widgets de disco).
@@ -387,6 +400,10 @@ await cornice.tailscale.status();
 await cornice.tailscale.set(true);
 await cornice.storage.status();   // totalBytes, freeBytes, usedBytes, recoverableBytes
 await cornice.storage.review();   // abre la ventana nativa de revisión
+await cornice.speedtest.run(8);   // { status: { download, upload, … } }
+await cornice.speedtest.last();   // { status: informe | null }
+cornice.speedtest.onProgress(({ phase, measurement }) => {});
+await cornice.speedtest.cancel();
 ```
 
 El `fetch` pasa por `WidgetHTTPClient` (allow-list + 30 req/min + credenciales inyectadas).
@@ -412,6 +429,18 @@ Debug: `CORNICE_START_STORAGE=1` abre la ventana al arrancar.
 
 `WebWidgetView` envuelve el `WKWebView` en un `NSView` con Auto Layout: devolverlo directo a
 SwiftUI no reflowea la página al cambiar el tamaño de la celda.
+
+### Test de velocidad
+
+`SystemSpeedTest` (actor) expone la capability `.speedtest`. `run(duration:progress:)`
+lanza dos procesos de `/usr/bin/networkQuality` (descarga y subida) y emite
+`.phase` / `.measured` para que el widget pinte la bajada mientras sube. `last()` lee
+`speedtest.json` y `cancel()` mata el proceso en curso. El test es manual por diseño: mueve
+cientos de MB y no debe dispararse al abrir el panel.
+
+`WebWidgetContent` publica el progreso con `window.__corniceSpeedTestProgress(payload)`; el
+widget se suscribe con `cornice.speedtest.onProgress(cb)`. Las respuestas usan la misma
+convención que storage/tailscale: el objeto viaja en `status` del payload resuelto.
 
 ### Instalación y upgrades
 
@@ -468,7 +497,7 @@ Hay un migrador de credenciales legacy en el host; no documentes de dónde lee.
 swift test
 ```
 
-123 tests. Cobertura por área:
+136 tests. Cobertura por área:
 
 - Geometría del notch y zonas (puro).
 - Máquina de estados del hover.
@@ -488,6 +517,8 @@ swift test
 - Tipografía: tokens del host (`WidgetTypographyTests`).
 - Almacenamiento: filtros de categorías, contención y borrado en directorios temporales
   (`StorageTests`).
+- Test de velocidad: parser de las dos generaciones de claves, clamp de duración, single-flight,
+  cancelación, timeout, persistencia del último informe y gating por capacidad.
 - Idioma: translator, persistencia, remontaje.
 
 Snapshots (a `$CORNICE_SNAPSHOT_DIR`): superficie, filmstrip de transición, formulario.
@@ -536,6 +567,10 @@ públicas si contienen widgets personales (§2).
 | Tailscale deja de responder tras mover el binario | solo se ejecutan binarios root/usuario sin escritura de grupo; revisa owner y permisos |
 | “CLI de Tailscale no disponible” con el CLI funcionando | stderr mezclado con el JSON, binario cacheado en `init` o un CLI colgado que atasca el canal GUI↔extensión; el host ya separa salidas, resuelve por llamada y mata el proceso a los 6 s. Si persiste, reinicia Tailscale (el CLI desde Terminal debe devolver JSON) |
 | `tailscale status` funciona en Terminal pero el widget dice “no responde” | el hijo directo de un LaunchAgent se cuelga en LaunchServices; el host lo ejecuta vía `osascript` + `do shell script` |
+| `networkQuality -u` sube en vez de bajar | los flags están invertidos: `-u` es “sin upload” (solo descarga) y `-d` “sin download” (solo subida) |
+| La prueba de velocidad tarda el doble de lo esperado | son dos procesos, uno por dirección; `-M` se aplica a cada fase |
+| Un widget de velocidad dice “not permitted” | la app instalada aún no conoce `.speedtest`: rebuild + `./install.sh` antes de copiar el bundle |
+| La prueba de velocidad se queda a medias | `.busy` rechaza una segunda prueba; `cancel()` mata el proceso y la primera promesa se rechaza |
 | El swipe va al revés | doble inversión de `scrollingDeltaX`: el offset usa el mismo signo que el delta |
 | La rueda del ratón no pagina | `phase == .none` siempre es false (OptionSet vs Optional); usa `phase.isEmpty` |
 | La rueda salta varias páginas | el ratón emite varios eventos por notch: acumula y aplica `WheelPagingState` |

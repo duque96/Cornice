@@ -89,6 +89,112 @@ public protocol StorageControlling: Sendable {
     func review() async
 }
 
+// MARK: - Speed test
+
+public enum SpeedTestPhase: String, Codable, Sendable, Equatable {
+    case download
+    case upload
+}
+
+/// One phase of a network quality test. Throughput is kept in bits per second,
+/// which is what the tool reports; display units are a widget concern.
+public struct SpeedTestMeasurement: Codable, Sendable, Equatable {
+    public let phase: SpeedTestPhase
+    public let bitsPerSecond: Double
+    /// Idle round-trip time in milliseconds.
+    public let latencyMilliseconds: Double?
+    /// Round trips per minute under load.
+    public let responsiveness: Double?
+    public let interfaceName: String?
+    public let endpoint: String?
+    public let measuredAt: Date
+
+    public init(
+        phase: SpeedTestPhase,
+        bitsPerSecond: Double,
+        latencyMilliseconds: Double? = nil,
+        responsiveness: Double? = nil,
+        interfaceName: String? = nil,
+        endpoint: String? = nil,
+        measuredAt: Date = Date()
+    ) {
+        self.phase = phase
+        self.bitsPerSecond = bitsPerSecond
+        self.latencyMilliseconds = latencyMilliseconds
+        self.responsiveness = responsiveness
+        self.interfaceName = interfaceName
+        self.endpoint = endpoint
+        self.measuredAt = measuredAt
+    }
+
+    public var megabitsPerSecond: Double { bitsPerSecond / 1_000_000 }
+}
+
+public struct SpeedTestReport: Codable, Sendable, Equatable {
+    public let download: SpeedTestMeasurement?
+    public let upload: SpeedTestMeasurement?
+    public let startedAt: Date
+    public let finishedAt: Date
+
+    public init(
+        download: SpeedTestMeasurement?,
+        upload: SpeedTestMeasurement?,
+        startedAt: Date,
+        finishedAt: Date
+    ) {
+        self.download = download
+        self.upload = upload
+        self.startedAt = startedAt
+        self.finishedAt = finishedAt
+    }
+}
+
+/// Incremental events so the widget can show the download figure while the
+/// upload phase is still running.
+public enum SpeedTestProgress: Sendable, Equatable {
+    case phase(SpeedTestPhase)
+    case measured(SpeedTestMeasurement)
+}
+
+public enum SpeedTestError: LocalizedError, Sendable, Equatable {
+    case unavailable
+    /// Another test is already saturating the link.
+    case busy
+    case cancelled
+    case timedOut
+    case commandFailed(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .unavailable: return "Network quality tool not available"
+        case .busy: return "A speed test is already running"
+        case .cancelled: return "Speed test cancelled"
+        case .timedOut: return "Speed test did not finish in time"
+        case .commandFailed(let message): return message
+        }
+    }
+}
+
+public protocol SpeedTestControlling: Sendable {
+    /// Runs download and upload in sequence. The host clamps `duration` per
+    /// phase; a widget cannot ask for an unbounded transfer.
+    func run(
+        duration: TimeInterval,
+        progress: (@Sendable (SpeedTestProgress) -> Void)?
+    ) async -> Result<SpeedTestReport, SpeedTestError>
+    /// Last stored report, so a widget can paint figures before running again.
+    func last() async -> SpeedTestReport?
+    func cancel() async
+}
+
+public extension SpeedTestControlling {
+    func run(duration: TimeInterval) async -> Result<SpeedTestReport, SpeedTestError> {
+        await run(duration: duration, progress: nil)
+    }
+
+    func cancel() async {}
+}
+
 public struct WidgetLog: Sendable {
     public let subsystem: String
 
@@ -120,6 +226,8 @@ public struct WidgetContext {
     public let tailscale: (any TailscaleControlling)?
     /// `nil` when the widget did not declare `.storage`.
     public let storage: (any StorageControlling)?
+    /// `nil` when the widget did not declare `.speedtest`.
+    public let speedtest: (any SpeedTestControlling)?
     public let log: WidgetLog
     /// Panel width the host is giving the stage, so widgets can size themselves.
     public let availableWidth: CGFloat
@@ -133,6 +241,7 @@ public struct WidgetContext {
         language: WidgetLanguage,
         tailscale: (any TailscaleControlling)?,
         storage: (any StorageControlling)?,
+        speedtest: (any SpeedTestControlling)?,
         log: WidgetLog,
         availableWidth: CGFloat
     ) {
@@ -144,6 +253,7 @@ public struct WidgetContext {
         self.language = language
         self.tailscale = tailscale
         self.storage = storage
+        self.speedtest = speedtest
         self.log = log
         self.availableWidth = availableWidth
     }

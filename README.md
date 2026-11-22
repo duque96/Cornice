@@ -106,6 +106,10 @@ Privileged helpers are also available, capability-gated:
 await cornice.tailscale.status();
 await cornice.storage.status(); // { totalBytes, freeBytes, usedBytes, recoverableBytes }
 await cornice.storage.review(); // opens the native review window; the widget never deletes
+await cornice.speedtest.run(8); // { status: { download, upload, startedAt, finishedAt } }
+await cornice.speedtest.last(); // { status: report | null }
+cornice.speedtest.onProgress(({ phase, measurement }) => { /* download → upload */ });
+await cornice.speedtest.cancel();
 ```
 
 Widgets inherit one type scale from the host as CSS variables, so every bundle shares the
@@ -170,6 +174,7 @@ A widget declares what it needs; the host decides what it actually gets.
 | `.keychain` | `WidgetContext.secrets` | scoped to `keychainServices`; other services return `nil` |
 | `.tailscale` | `WidgetContext.tailscale` / `cornice.tailscale` | fixed `status` / `up` / `down`, trusted binary |
 | `.storage` | `WidgetContext.storage` / `cornice.storage` | read-only capacity plus a request to open the review window; deletion is native and confirmed |
+| `.speedtest` | `WidgetContext.speedtest` / `cornice.speedtest` | one tool (`/usr/bin/networkQuality`) with fixed flags, duration clamped by the host, one test at a time |
 | credentials | `Authorization` (or the declared header) | exact host only (subdomains do not inherit it), declared service and account; the secret never reaches JS |
 
 No capability means no object: `context.http` and `context.secrets` are `nil`, and the
@@ -197,6 +202,21 @@ roots under the user's home. Documents, Photos, Mail, Application Support, conta
 `/Library` caches and Time Machine snapshots are never touched. The Analyze tab lists large
 files and old downloads and only moves them to the Trash. Local Time Machine snapshots are
 reported for information; deleting them requires an administrator.
+
+## Speed test
+
+A widget that declares `.speedtest` can ask the host to run the network quality tool that
+ships with macOS (`/usr/bin/networkQuality`), the same one behind `networkQuality` in
+Terminal. The host runs one process per direction (`-u` skips the upload, `-d` skips the
+download — the flags are inverted with respect to what the names suggest), so the download
+figure can be shown while the upload is still running.
+
+The widget never chooses a server, a command or a duration outside the bounds: the host
+clamps each phase to 3–30 seconds, allows a single test at a time, and kills the process on
+timeout or when the widget cancels. Measurements are reported in bits per second; the last
+report is stored in `~/Library/Application Support/Cornice/speedtest.json` so a widget can
+paint the previous figures when it is mounted again. A test moves real data, so it is manual
+by design: the host never starts one on its own.
 
 ## Localization
 
