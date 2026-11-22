@@ -153,6 +153,8 @@ public struct SpeedTestReport: Codable, Sendable, Equatable {
 /// upload phase is still running.
 public enum SpeedTestProgress: Sendable, Equatable {
     case phase(SpeedTestPhase)
+    /// Live reading while a phase runs (the tool reports it roughly twice a second).
+    case sample(SpeedTestPhase, bitsPerSecond: Double, responsiveness: Double?)
     case measured(SpeedTestMeasurement)
 }
 

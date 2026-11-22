@@ -20,7 +20,7 @@ desde disco, declaran capacidades y nunca tocan el sistema directamente.
 - **Host**: `CorniceHost` — montaje, reloj, capacidades, secretos, loader de disco, UI de ajustes.
 - **Core**: `CorniceCore` — panel, geometría, animación, ajustes, localización.
 
-Estado: M11. 136 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
+Estado: M11. 141 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
 App Store.
 
 > Si una tarea toca el homelab, aplica también las reglas globales
@@ -85,7 +85,7 @@ Widgets de disco → solo ven el bridge JS, nunca Swift
 
 ```bash
 swift build                      # debug
-swift test                       # 136 tests
+swift test                       # 141 tests
 ./build-app.sh                   # release + dist/Cornice.app (copia BundledWidgets a Resources)
 ./install.sh                     # ~/Applications + LaunchAgent (arranque al login)
 ./uninstall.sh                   # quita app y agente; conserva datos
@@ -255,7 +255,8 @@ WidgetManifest(id:name:version:apiVersion:capabilities:networkHosts:keychainServ
   (`SystemTailscale`), con timeout; nunca un shell.
 - `.speedtest`: `WidgetContext.speedtest` + `cornice.speedtest.run(segundos)` /
   `last()` / `cancel()` / `onProgress(cb)`. Un solo binario (`/usr/bin/networkQuality`) con
-  flags fijos; la duración la clampa el host (3–30 s por fase).
+  flags fijos; la duración la clampa el host (3–30 s por fase). `onProgress` recibe `.phase`,
+  `.sample` (~2 Hz, cifra en vivo) y `.measured` (final).
 
 `SystemTailscale` solo ejecuta binarios **de confianza**: owner root o el usuario actual y
 sin permiso de escritura para grupo/otros. Prefiere el binario de la app (`/Applications/…`)
@@ -289,6 +290,14 @@ subida. La duración se clampa a 3–30 s por fase, solo hay una prueba a la vez
 CLI de Tailscale. El último informe se guarda en `speedtest.json`: el webview es efímero y
 sin eso el widget perdería las cifras al remontarse. La salida va a archivos temporales
 (el JSON lleva arrays de muestras y llenaría un pipe).
+
+Las cifras en vivo salen de `-v`, pero el binario **solo imprime progreso si stdout es un
+TTY**: por eso cada proceso corre con un pseudo-terminal (`posix_openpt`) como stdout, y se
+lee el maestro sin bloquear en el mismo bucle que espera al proceso. Cada línea
+(`Downlink: capacity 324.260 Mbps, responsiveness 1050 RPM …`) se convierte en un `.sample`;
+los ceros iniciales se descartan. El resultado final sigue siendo el JSON de `-c<archivo>`
+(el nombre va **pegado**: `-c archivo` imprime la ayuda). Si no hubiera pty, la prueba
+funciona igual pero sin muestras.
 
 `WidgetContext`: `http`, `secrets`, `settings`, `language`, `tailscale`, `storage`,
 `speedtest`, `log`, `availableWidth`, `capabilities`.
@@ -403,7 +412,7 @@ await cornice.storage.status();   // totalBytes, freeBytes, usedBytes, recoverab
 await cornice.storage.review();   // abre la ventana nativa de revisión
 await cornice.speedtest.run(8);   // { status: { download, upload, … } }
 await cornice.speedtest.last();   // { status: informe | null }
-cornice.speedtest.onProgress(({ phase, measurement }) => {});
+cornice.speedtest.onProgress(({ phase, bitsPerSecond, measurement }) => {});
 await cornice.speedtest.cancel();
 ```
 
@@ -434,8 +443,8 @@ SwiftUI no reflowea la página al cambiar el tamaño de la celda.
 ### Test de velocidad
 
 `SystemSpeedTest` (actor) expone la capability `.speedtest`. `run(duration:progress:)`
-lanza dos procesos de `/usr/bin/networkQuality` (descarga y subida) y emite
-`.phase` / `.measured` para que el widget pinte la bajada mientras sube. `last()` lee
+lanza dos procesos de `/usr/bin/networkQuality` (descarga y subida) y emite `.phase`,
+`.sample` (~2 Hz mientras corre la fase) y `.measured` (final). `last()` lee
 `speedtest.json` y `cancel()` mata el proceso en curso. El test es manual por diseño: mueve
 cientos de MB y no debe dispararse al abrir el panel.
 
@@ -496,7 +505,7 @@ la credencial al hacer `fetch`.
 swift test
 ```
 
-136 tests. Cobertura por área:
+141 tests. Cobertura por área:
 
 - Geometría del notch y zonas (puro).
 - Máquina de estados del hover.
@@ -516,8 +525,9 @@ swift test
 - Tipografía: tokens del host (`WidgetTypographyTests`).
 - Almacenamiento: filtros de categorías, contención y borrado en directorios temporales
   (`StorageTests`).
-- Test de velocidad: parser de las dos generaciones de claves, clamp de duración, single-flight,
-  cancelación, timeout, persistencia del último informe y gating por capacidad.
+- Test de velocidad: parser del JSON y de las líneas de progreso, clamp de duración,
+  single-flight, cancelación, timeout, muestras en vivo, persistencia del último informe y
+  gating por capacidad.
 - Idioma: translator, persistencia, remontaje.
 
 Snapshots (a `$CORNICE_SNAPSHOT_DIR`): superficie, filmstrip de transición, formulario.
@@ -567,6 +577,8 @@ públicas si contienen widgets personales (§2).
 | “CLI de Tailscale no disponible” con el CLI funcionando | stderr mezclado con el JSON, binario cacheado en `init` o un CLI colgado que atasca el canal GUI↔extensión; el host ya separa salidas, resuelve por llamada y mata el proceso a los 6 s. Si persiste, reinicia Tailscale (el CLI desde Terminal debe devolver JSON) |
 | `tailscale status` funciona en Terminal pero el widget dice “no responde” | el hijo directo de un LaunchAgent se cuelga en LaunchServices; el host lo ejecuta vía `osascript` + `do shell script` |
 | `networkQuality -u` sube en vez de bajar | los flags están invertidos: `-u` es “sin upload” (solo descarga) y `-d` “sin download” (solo subida) |
+| El widget solo enseña cifras al final de cada fase | el progreso de `networkQuality -v` solo se imprime si stdout es un TTY; el host conecta un pseudo-terminal y lee el maestro |
+| `networkQuality` imprime la ayuda en vez de correr | `-c` solo acepta el archivo pegado: `-c/tmp/x.json`, nunca `-c /tmp/x.json` |
 | La prueba de velocidad tarda el doble de lo esperado | son dos procesos, uno por dirección; `-M` se aplica a cada fase |
 | Un widget de velocidad dice “not permitted” | la app instalada aún no conoce `.speedtest`: rebuild + `./install.sh` antes de copiar el bundle |
 | La prueba de velocidad se queda a medias | `.busy` rechaza una segunda prueba; `cancel()` mata el proceso y la primera promesa se rechaza |

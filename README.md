@@ -108,7 +108,9 @@ await cornice.storage.status(); // { totalBytes, freeBytes, usedBytes, recoverab
 await cornice.storage.review(); // opens the native review window; the widget never deletes
 await cornice.speedtest.run(8); // { status: { download, upload, startedAt, finishedAt } }
 await cornice.speedtest.last(); // { status: report | null }
-cornice.speedtest.onProgress(({ phase, measurement }) => { /* download → upload */ });
+cornice.speedtest.onProgress(({ phase, bitsPerSecond, measurement }) => {
+  // phase + live bitsPerSecond while it runs, measurement when the phase ends
+});
 await cornice.speedtest.cancel();
 ```
 
@@ -213,10 +215,14 @@ figure can be shown while the upload is still running.
 
 The widget never chooses a server, a command or a duration outside the bounds: the host
 clamps each phase to 3–30 seconds, allows a single test at a time, and kills the process on
-timeout or when the widget cancels. Measurements are reported in bits per second; the last
-report is stored in `~/Library/Application Support/Cornice/speedtest.json` so a widget can
-paint the previous figures when it is mounted again. A test moves real data, so it is manual
-by design: the host never starts one on its own.
+timeout or when the widget cancels. While a phase runs, the tool's verbose progress stream
+is parsed (through a pseudo-terminal: it only prints live lines when stdout is a TTY) and
+forwarded as samples, roughly twice a second, so the figure moves instead of appearing all
+at once. The final measurement still comes from the JSON report. Measurements are reported
+in bits per second; the last report is stored in
+`~/Library/Application Support/Cornice/speedtest.json` so a widget can paint the previous
+figures when it is mounted again. A test moves real data, so it is manual by design: the
+host never starts one on its own.
 
 ## Localization
 

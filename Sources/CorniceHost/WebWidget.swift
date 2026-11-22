@@ -390,10 +390,15 @@ final class WebWidgetContent: NSObject, WKScriptMessageHandler, WKNavigationDele
     }
 
     private func pushSpeedTestProgress(_ event: SpeedTestProgress) {
-        let payload: [String: Any]
+        var payload: [String: Any]
         switch event {
         case .phase(let phase):
             payload = ["phase": phase.rawValue]
+        case .sample(let phase, let bitsPerSecond, let responsiveness):
+            payload = ["phase": phase.rawValue, "bitsPerSecond": bitsPerSecond]
+            if let responsiveness {
+                payload["responsiveness"] = responsiveness
+            }
         case .measured(let measurement):
             payload = [
                 "phase": measurement.phase.rawValue,

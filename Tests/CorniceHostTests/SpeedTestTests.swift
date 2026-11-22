@@ -27,14 +27,39 @@ private let uploadJSON = """
  "interface_name": "en0", "test_endpoint": "speed.example.com"}
 """
 
+/// A fake tool that mimics `networkQuality` closely enough: progress lines on
+/// stdout (a TTY at runtime) and the JSON report on the `-c` path.
 private func twoPhaseScript(argsURL: URL) -> String {
     """
     printf '%s\\n' "$*" >> '\(argsURL.path)'
+    json=''
+    for arg in "$@"; do
+      case "$arg" in
+        -c*) json="${arg#-c}" ;;
+      esac
+    done
     if [ "$1" = "-u" ]; then
-      printf '%s\\n' '\(downloadJSON)'
+      printf 'Downlink: capacity 120.500 Mbps, responsiveness 0 RPM (3.094 MB, 1 flow) - Uplink: capacity 0.000 Mbps, responsiveness 0 RPM (0 B, 0 flows)\\n'
+      printf 'Downlink: capacity 300.000 Mbps, responsiveness 900 RPM (12.859 MB, 2 flows) - Uplink: capacity 0.000 Mbps, responsiveness 0 RPM (0 B, 0 flows)\\n'
+      printf '%s\\n' '\(downloadJSON)' > "$json"
     else
-      printf '%s\\n' '\(uploadJSON)'
+      printf 'Downlink: capacity 0.000 Mbps, responsiveness 0 RPM (0 B, 0 flows) - Uplink: capacity 240.250 Mbps, responsiveness 700 RPM (8.000 MB, 1 flow)\\n'
+      printf '%s\\n' '\(uploadJSON)' > "$json"
     fi
+    """
+}
+
+private func hangingScript(marker: URL?, json: String, seconds: Int) -> String {
+    """
+    \(marker.map { "touch '\($0.path)'" } ?? "")
+    sleep \(seconds)
+    json=''
+    for arg in "$@"; do
+      case "$arg" in
+        -c*) json="${arg#-c}" ;;
+      esac
+    done
+    printf '%s\\n' '\(json)' > "$json"
     """
 }
 
@@ -46,6 +71,29 @@ private func waitForFile(_ url: URL, timeout: TimeInterval = 3) async -> Bool {
         try? await Task.sleep(for: .milliseconds(50))
     }
     return false
+}
+
+/// The progress callback is `@Sendable`; this keeps the received order.
+private final class SampleBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var events: [SpeedTestProgress] = []
+
+    func add(_ event: SpeedTestProgress) {
+        lock.lock()
+        events.append(event)
+        lock.unlock()
+    }
+
+    var samples: [(phase: SpeedTestPhase, bitsPerSecond: Double, responsiveness: Double?)] {
+        lock.lock()
+        defer { lock.unlock() }
+        return events.compactMap {
+            guard case .sample(let phase, let bitsPerSecond, let responsiveness) = $0 else {
+                return nil
+            }
+            return (phase, bitsPerSecond, responsiveness)
+        }
+    }
 }
 
 // MARK: - Parser
@@ -100,6 +148,44 @@ final class SpeedTestParsingTests: XCTestCase {
         let json = #"{"dl_throughput": 0}"#
         XCTAssertNil(SystemSpeedTest.parse(Data(json.utf8), phase: .download))
     }
+
+    // MARK: Live progress lines
+
+    func testParsesDownloadProgressLine() throws {
+        let line = "\u{1B}[2K\rDownlink: capacity 324.260 Mbps, responsiveness 1050 RPM (71.058 MB, 2 flows) - Uplink: capacity 0.000 Mbps, responsiveness 0 RPM (0 B, 0 flows)"
+
+        let sample = try XCTUnwrap(SystemSpeedTest.parseProgressLine(line, phase: .download))
+
+        XCTAssertEqual(sample.bitsPerSecond, 324_260_000, accuracy: 1)
+        XCTAssertEqual(sample.responsiveness, 1050)
+    }
+
+    func testUploadLineUsesItsOwnSection() throws {
+        // The downlink half reports 0 RPM; the upload half is the one we want.
+        let line = "Downlink: capacity 0.000 Mbps, responsiveness 0 RPM (0 B, 0 flows) - Uplink: capacity 92.204 Mbps, responsiveness 907 RPM (42.062 MB, 4 flows)"
+
+        let sample = try XCTUnwrap(SystemSpeedTest.parseProgressLine(line, phase: .upload))
+
+        XCTAssertEqual(sample.bitsPerSecond, 92_204_000, accuracy: 1)
+        XCTAssertEqual(sample.responsiveness, 907)
+    }
+
+    func testProgressLineWithoutTrafficIsIgnored() {
+        let line = "Downlink: capacity 0.000 Mbps, responsiveness 0 RPM (0 B, 0 flows) - Uplink: capacity 0.000 Mbps, responsiveness 0 RPM (0 B, 0 flows)"
+
+        XCTAssertNil(SystemSpeedTest.parseProgressLine(line, phase: .download))
+        XCTAssertNil(SystemSpeedTest.parseProgressLine(line, phase: .upload))
+        XCTAssertNil(SystemSpeedTest.parseProgressLine("not a progress line", phase: .download))
+    }
+
+    func testProgressLineAcceptsCommaDecimal() throws {
+        let line = "Downlink: capacity 120,500 Mbps, responsiveness 0 RPM - Uplink: capacity 0,000 Mbps, responsiveness 0 RPM"
+
+        let sample = try XCTUnwrap(SystemSpeedTest.parseProgressLine(line, phase: .download))
+
+        XCTAssertEqual(sample.bitsPerSecond, 120_500_000, accuracy: 1)
+        XCTAssertNil(sample.responsiveness)
+    }
 }
 
 // MARK: - Runner
@@ -127,7 +213,39 @@ final class SpeedTestRunnerTests: XCTestCase {
         let calls = try String(contentsOf: argsURL, encoding: .utf8)
             .split(separator: "\n")
             .map(String.init)
-        XCTAssertEqual(calls, ["-u -M 30 -c", "-d -M 30 -c"])
+        XCTAssertEqual(calls.count, 2)
+        XCTAssertTrue(calls[0].hasPrefix("-u -M 30 -v -c"), calls[0])
+        XCTAssertTrue(calls[0].hasSuffix(".json"), calls[0])
+        XCTAssertTrue(calls[1].hasPrefix("-d -M 30 -v -c"), calls[1])
+    }
+
+    func testStreamsLiveSamplesBeforeTheFinalReport() async throws {
+        let argsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("args-\(UUID().uuidString).txt")
+        defer { try? FileManager.default.removeItem(at: argsURL) }
+
+        let script = try shellScript(twoPhaseScript(argsURL: argsURL))
+        defer { try? FileManager.default.removeItem(at: script) }
+
+        let box = SampleBox()
+        let result = await SystemSpeedTest(binary: script, resultsURL: nil)
+            .run(duration: 5) { box.add($0) }
+
+        guard case .success = result else {
+            return XCTFail("expected success, got \(result)")
+        }
+
+        let samples = box.samples
+        XCTAssertEqual(samples.count, 3)
+        XCTAssertEqual(samples[0].phase, .download)
+        XCTAssertEqual(samples[0].bitsPerSecond, 120_500_000, accuracy: 1)
+        XCTAssertNil(samples[0].responsiveness)
+        XCTAssertEqual(samples[1].phase, .download)
+        XCTAssertEqual(samples[1].bitsPerSecond, 300_000_000, accuracy: 1)
+        XCTAssertEqual(samples[1].responsiveness, 900)
+        XCTAssertEqual(samples[2].phase, .upload)
+        XCTAssertEqual(samples[2].bitsPerSecond, 240_250_000, accuracy: 1)
+        XCTAssertEqual(samples[2].responsiveness, 700)
     }
 
     func testSecondRunWhileBusyIsRejected() async throws {
@@ -135,7 +253,9 @@ final class SpeedTestRunnerTests: XCTestCase {
             .appendingPathComponent("started-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: marker) }
 
-        let script = try shellScript("touch '\(marker.path)'\nsleep 3\nprintf '%s\\n' '\(downloadJSON)'")
+        let script = try shellScript(
+            hangingScript(marker: marker, json: downloadJSON, seconds: 3)
+        )
         defer { try? FileManager.default.removeItem(at: script) }
 
         let service = SystemSpeedTest(binary: script, resultsURL: nil)
@@ -160,7 +280,9 @@ final class SpeedTestRunnerTests: XCTestCase {
             .appendingPathComponent("started-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: marker) }
 
-        let script = try shellScript("touch '\(marker.path)'\nsleep 10\nprintf '%s\\n' '\(downloadJSON)'")
+        let script = try shellScript(
+            hangingScript(marker: marker, json: downloadJSON, seconds: 10)
+        )
         defer { try? FileManager.default.removeItem(at: script) }
 
         let service = SystemSpeedTest(binary: script, resultsURL: nil)
@@ -179,8 +301,9 @@ final class SpeedTestRunnerTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(cancelStarted), 4)
     }
 
-    func testUnparsableOutputIsACommandFailure() async throws {
-        let script = try shellScript("printf '%s\\n' 'no me gusta este JSON'")
+    func testMissingJsonIsACommandFailure() async throws {
+        // Exit 0 with no report file: the tool lied about succeeding.
+        let script = try shellScript("printf 'Downlink: capacity 10.000 Mbps, responsiveness 0 RPM\\n'")
         defer { try? FileManager.default.removeItem(at: script) }
 
         let result = await SystemSpeedTest(binary: script, resultsURL: nil).run(duration: 5)
@@ -188,7 +311,7 @@ final class SpeedTestRunnerTests: XCTestCase {
         guard case .failure(.commandFailed(let message)) = result else {
             return XCTFail("expected commandFailed, got \(result)")
         }
-        XCTAssertTrue(message.contains("JSON"))
+        XCTAssertTrue(message.contains("networkQuality"))
     }
 
     func testMissingBinaryIsUnavailable() async {
