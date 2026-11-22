@@ -23,8 +23,9 @@ desde disco, declaran capacidades y nunca tocan el sistema directamente.
 Estado: M11. 136 tests. Pensado para instalarse desde el repo (`./install.sh`), no para la
 App Store.
 
-> Si una tarea toca el homelab, aplica también `~/.config/opencode/AGENTS.md` y el repo
-> `~/homeserver` (pull antes, nota después).
+> Si una tarea toca el homelab, aplica también las reglas globales
+> (`~/.config/opencode/AGENTS.md`) y el repo de conocimiento del homelab (pull antes, nota
+> después).
 
 ---
 
@@ -454,9 +455,9 @@ nunca se pisan carpetas del usuario).
 ## 10. Widgets incluidos
 
 `BundledWidgets/` contiene **solo un widget de ejemplo genérico** (Clock). Los widgets
-personales viven fuera del repo, en `/Volumes/Externo/Proyectos/CorniceWidgets/`, y se
-instalan a mano en `~/Library/Application Support/Cornice/Widgets/`. No los traigas al repo
-ni los documentes (§2).
+personales viven fuera del repo, en una carpeta local de bundles, y se instalan a mano en
+`~/Library/Application Support/Cornice/Widgets/`. No los traigas al repo ni los documentes
+(§2).
 
 El host ignora manifests con `problems`; el test `testEveryBundledWidgetLoads` recorre la
 carpeta y falla si alguno es inválido.
@@ -473,8 +474,6 @@ directorios `0700`.
 vuelve a pedir permiso (llegó a bloquear el arranque). El modelo de amenaza es el mismo que
 el de un archivo plano de usuario, y el widget sigue sin poder leerlo: solo el host inyecta
 la credencial al hacer `fetch`.
-
-Hay un migrador de credenciales legacy en el host; no documentes de dónde lee.
 
 ---
 
@@ -584,7 +583,7 @@ públicas si contienen widgets personales (§2).
 ## 16. Añadir un widget
 
 1. Para un ejemplo genérico: `BundledWidgets/<Nombre>.cornicewidget/`. Para uno personal:
-   fuera del repo, en `/Volumes/Externo/Proyectos/CorniceWidgets/`.
+   fuera del repo, en una carpeta local de bundles.
 2. `id` reverse-DNS único; `apiVersion: 1`; `version` semver.
 3. Declara solo las capacidades que uses, con sus listas (`networkHosts`,
    `keychainServices`, `credentials`).
